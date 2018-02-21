@@ -8,11 +8,13 @@ import (
 	"runtime"
 	"strings"
 
-	log "github.com/Sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
+
+var cliLog = logrus.WithField("module", "cli")
 
 const (
 	EXIT_CODE_RUNTIME_ERROR = 1
@@ -35,13 +37,13 @@ type TaskFunc func(t *Task, args []string)
 // attached to the Task
 var defaultTaskFunc TaskFunc = func(t *Task, args []string) {
 	if err := t.SetDefaults(args); err != nil {
-		log.Fatalf("Error setting container defaults: %s", err)
+		cliLog.WithError(err).Fatal("Setting container defaults")
 	}
 	if err := t.InitDocker(); err != nil {
-		log.Fatalf("Error initialising Docker: %s", err)
+		cliLog.WithError(err).Fatal("Initialising Docker")
 	}
 	if _, err := t.StartContainer(false, ""); err != nil {
-		log.Fatalf("Error executing task: %s", err)
+		cliLog.WithError(err).Fatal("Executing task")
 	}
 }
 
@@ -65,20 +67,18 @@ func (t *Task) SetInitFunc(f TaskFunc) {
 }
 
 // SetDefaults sets the default host config for a task container
-// Sets /tmp/workspace as the workdir
-// Publishes HOST_USER_ID and HOST_GROUP_ID in the container
-// Mounts the PWD to /tmp/workspace
-// Configures git
-// Set the default command
+//  - Sets /tmp/workspace as the workdir
+//  - Publishes HOST_USER_ID and HOST_GROUP_ID in the container
+//  - Mounts the PWD to /tmp/workspace
+//  - Configures git
+//  - Set the default command
 func (t *Task) SetDefaults(args []string) error {
 	t.SetWorkDir(workdir)
-	awsDir, err := t.Bind("~/.aws", "/root/.aws")
 
 	u, err := user.Current()
 	if err != nil {
-		log.Fatalf("Failed to find uid for user: %s", err)
+		return err
 	}
-	t.AddBinds([]string{awsDir})
 	t.AddEnv("HOST_USER_ID", u.Uid)
 	t.AddEnv("HOST_GROUP_ID", u.Gid)
 
@@ -93,6 +93,7 @@ func (t *Task) SetDefaults(args []string) error {
 	if err != nil {
 		return err
 	}
+
 	t.SetCmd(args)
 	return nil
 }
@@ -108,7 +109,7 @@ func (t *Task) Bind(src, dst string) (string, error) {
 		usr, err := user.Current()
 
 		if err != nil {
-			return expanded, fmt.Errorf("Error expanding bind path: %s")
+			return expanded, fmt.Errorf("CLI failed to expand bind path: %s", err)
 		}
 		expanded = filepath.Join(usr.HomeDir, src[2:])
 	} else {
@@ -117,7 +118,8 @@ func (t *Task) Bind(src, dst string) (string, error) {
 	expanded, err := filepath.Abs(expanded)
 
 	if err != nil {
-		return expanded, fmt.Errorf("Error expanding bind path: %s")
+		return expanded, fmt.Errorf("CLI failed to expand bind path: %s", err)
+		return expanded, err
 	}
 	return fmt.Sprintf("%s:%s", expanded, dst), nil
 }
@@ -215,11 +217,11 @@ func Cli(n string) *cli {
 	}
 	c.cobra.PersistentPreRun = func(cmd *cobra.Command, args []string) {
 		if debug {
-			log.SetLevel(log.DebugLevel)
+			logrus.SetLevel(logrus.DebugLevel)
 		}
 
 		if jsonLogs {
-			log.SetFormatter(&log.JSONFormatter{})
+			logrus.SetFormatter(&logrus.JSONFormatter{})
 		}
 	}
 	myFlags = viper.New()

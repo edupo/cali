@@ -9,7 +9,7 @@ import (
 	"os/signal"
 	"path"
 
-	log "github.com/Sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
@@ -18,6 +18,9 @@ import (
 	"golang.org/x/net/context"
 	pb "gopkg.in/cheggaaa/pb.v1"
 )
+
+// Module logger
+var dockerLog = logrus.WithField("module", "docker")
 
 // Event holds the json structure for Docker API events
 type Event struct {
@@ -184,19 +187,19 @@ func (c *DockerClient) BindFromGit(cfg *GitCheckoutConfig, noGit func() error) e
 
 // StartContainer will create and start a container with logs and optional cleanup
 func (c *DockerClient) StartContainer(rm bool, name string) (string, error) {
-	log.WithFields(log.Fields{
+	dockerLog.WithFields(logrus.Fields{
 		"image": c.Conf.Image,
 		"envs":  fmt.Sprintf("%v", c.Conf.Env),
 		"cmd":   fmt.Sprintf("%v", c.Conf.Cmd),
-	}).Debug("Creating new container")
+	}).Debug("Docker creating new container")
 
 	if err := c.PullImage(c.Conf.Image); err != nil {
-		return "", fmt.Errorf("Failed to fetch image: %s", err)
+		return "", fmt.Errorf("Docker failed to pull container: %s", err)
 	}
 	resp, err := c.Cli.ContainerCreate(context.Background(), c.Conf, c.HostConf, c.NetConf, name)
 
 	if err != nil {
-		return "", fmt.Errorf("Failed to create container: %s", err)
+		return "", fmt.Errorf("Docker failed to create container: %s", err)
 	}
 
 	// Clean up on ctrl+c
@@ -206,14 +209,14 @@ func (c *DockerClient) StartContainer(rm bool, name string) (string, error) {
 
 	go func() {
 		<-ch
-		log.Debug("Trapped ctrl+c")
+		dockerLog.Debug("Trapped ctrl+c")
 
 		if err = c.DeleteContainer(resp.ID); err != nil {
-			log.Errorf("Failed to remove container: %s", err)
+			dockerLog.WithError(err).Error("Docker failed to remove container")
 		}
 		os.Exit(1)
 	}()
-	log.WithFields(log.Fields{
+	dockerLog.WithFields(logrus.Fields{
 		"image": c.Conf.Image,
 		"id":    resp.ID[0:12],
 	}).Debug("Starting new container")
@@ -224,11 +227,11 @@ func (c *DockerClient) StartContainer(rm bool, name string) (string, error) {
 	if !nonInteractive && terminal.IsTerminal(fd) {
 		// While we have a container running, create a buffer for the pscli logs
 		logBuffer := bufio.NewWriter(os.Stdout)
-		log.SetOutput(logBuffer)
+		logrus.SetOutput(logBuffer)
 		// Write buffer to stdout once detatched from container
 		defer logBuffer.Flush()
 		// Reset logs to stdout after conection is closed
-		defer log.SetOutput(os.Stdout)
+		defer logrus.SetOutput(os.Stdout)
 
 		// If we have an interactive terminal then use it!
 		ca := types.ContainerAttachOptions{
@@ -241,7 +244,8 @@ func (c *DockerClient) StartContainer(rm bool, name string) (string, error) {
 		defer hijack.Conn.Close()
 
 		if err != nil {
-			return resp.ID, fmt.Errorf("Failed to start container: %s", err)
+			dockerLog.WithError(err).Error("Docker failed to start container")
+			return resp.ID, err
 		}
 		oldState, err := terminal.MakeRaw(fd)
 		defer terminal.Restore(fd, oldState)
@@ -251,7 +255,8 @@ func (c *DockerClient) StartContainer(rm bool, name string) (string, error) {
 		}
 
 		if err := c.Cli.ContainerStart(context.Background(), resp.ID, types.ContainerStartOptions{}); err != nil {
-			return resp.ID, fmt.Errorf("Failed to start container: %s", err)
+			dockerLog.WithError(err).Error("Docker failed to start container")
+			return resp.ID, err
 		}
 
 		// Start stdin reader
@@ -260,26 +265,28 @@ func (c *DockerClient) StartContainer(rm bool, name string) (string, error) {
 			defer hijack.Conn.Close()
 
 			if _, err := io.Copy(hijack.Conn, os.Stdin); err != nil {
-				log.Errorf("Write error: %s", err)
+				dockerLog.WithError(err).Error("Write error")
 			}
 		}()
 
 		tw, th, _ := terminal.GetSize(fd)
 
 		if err := c.Cli.ContainerResize(context.Background(), resp.ID, types.ResizeOptions{Height: uint(th), Width: uint(tw)}); err != nil {
-			return resp.ID, fmt.Errorf("Failed to start container: %s", err)
+			dockerLog.WithError(err).Error("Docker failed to start container")
+			return resp.ID, err
 		}
 
 		// Start stdout writer
 		if _, err := io.Copy(os.Stdout, hijack.Conn); err != nil {
-			log.Errorf("Read error: %s", err)
+			dockerLog.WithError(err).Error("Read error")
 		}
 	} else {
 		// No terminal, then just pump out the log output
 		if err := c.Cli.ContainerStart(context.Background(), resp.ID, types.ContainerStartOptions{}); err != nil {
-			return resp.ID, fmt.Errorf("Failed to start container: %s", err)
+			dockerLog.WithError(err).Error("Docker failed to start container")
+			return resp.ID, err
 		}
-		log.WithFields(log.Fields{
+		dockerLog.WithFields(logrus.Fields{
 			"image": c.Conf.Image,
 			"id":    resp.ID[0:12],
 		}).Debug("Fetching log stream")
@@ -287,29 +294,29 @@ func (c *DockerClient) StartContainer(rm bool, name string) (string, error) {
 		ls, err := c.Cli.ContainerLogs(context.Background(), resp.ID, logOptions)
 
 		if err != nil {
-			return resp.ID, fmt.Errorf("Failed to get container logs: %s", err)
+			return resp.ID, fmt.Errorf("Docker failed to get logs: %s", err)
 		}
 
 		_, err = io.Copy(os.Stdout, ls)
 		if err != nil {
-			return resp.ID, fmt.Errorf("Failed to get container logs: %s", err)
+			return resp.ID, fmt.Errorf("Docker failed to get logs: %s", err)
 		}
 	}
 	// Container has finished running. Get its exit code
 	inspect, err := c.Cli.ContainerInspect(context.Background(), resp.ID)
 	if err != nil {
-		return resp.ID, fmt.Errorf("Failed to inspect Docker container: %s", err)
+		return resp.ID, fmt.Errorf("Docker failed to inspect: %s", err)
 	}
 
 	if rm {
 
 		if err = c.DeleteContainer(resp.ID); err != nil {
-			return resp.ID, fmt.Errorf("Failed to remove container: %s", err)
+			return resp.ID, fmt.Errorf("Docker failed to remove: %s", err)
 		}
 	}
 
 	if inspect.State.ExitCode != 0 {
-		return resp.ID, fmt.Errorf("Non-zero exit status from Docker container")
+		return resp.ID, fmt.Errorf("Docker container returned non-zero")
 	}
 	return resp.ID, nil
 }
@@ -327,29 +334,24 @@ func (c *DockerClient) ContainerExists(name string) bool {
 
 // DeleteContainer - Delete a container
 func (c *DockerClient) DeleteContainer(id string) error {
-	log.WithFields(log.Fields{
+	dockerLog.WithFields(logrus.Fields{
 		"id": id[0:12],
-	}).Debug("Removing container")
+	}).Debug("Removing Docker container")
 
 	if err := c.Cli.ContainerRemove(context.Background(), id, types.ContainerRemoveOptions{Force: true}); err != nil {
-		return fmt.Errorf("Failed to remove container: %s", err)
+		return fmt.Errorf("Docker failed to remove: %s", err)
 	}
 	return nil
 }
 
 // ImageExists determines if an image exist locally
 func (c *DockerClient) ImageExists(image string) bool {
-	log.WithFields(log.Fields{
-		"image": image,
-	}).Debug("Checking if image exists locally")
-
+	dockerLog.WithField("image", image).Info("Checking if Docker image exists locally")
 	_, _, err := c.Cli.ImageInspectWithRaw(context.Background(), image)
 
 	// Safe assumption?
 	if err != nil {
-		log.WithFields(log.Fields{
-			"image": image,
-		}).Debugf("Error inspecting image: %s", err)
+		dockerLog.WithError(err).WithField("image", image).Debug("Docker failed to inspect image")
 		return false
 	}
 	return true
@@ -359,15 +361,12 @@ func (c *DockerClient) ImageExists(image string) bool {
 func (c *DockerClient) PullImage(image string) error {
 
 	if !c.ImageExists(image) {
-		log.WithFields(log.Fields{
-			"image": image,
-		}).Info("Pulling image layers... please wait")
-
+		dockerLog.WithField("image", image).Info("Pulling Docker image layers... please wait")
 		resp, err := c.Cli.ImagePull(context.Background(), image, types.ImagePullOptions{})
-
 		if err != nil {
-			return fmt.Errorf("API could not fetch \"%s\": %s", image, err)
+			return fmt.Errorf("Docker failed to fetch \"%s\": %s", image, err)
 		}
+
 		scanner := bufio.NewScanner(resp)
 		var cr CreateResponse
 		bar := pb.New(1)
@@ -385,7 +384,7 @@ func (c *DockerClient) PullImage(image string) error {
 			byt := []byte(txt)
 
 			if err := json.Unmarshal(byt, &cr); err != nil {
-				return fmt.Errorf("Error decoding json from create image API: %s", err)
+				return fmt.Errorf("Error decoding json from Docker create: %s", err)
 			}
 
 			if cr.Status == "Downloading" {
@@ -402,7 +401,7 @@ func (c *DockerClient) PullImage(image string) error {
 		}
 
 		if err := scanner.Err(); err != nil {
-			return fmt.Errorf("Failed to get logs: %s", err)
+			return fmt.Errorf("Docker failed to get logs: %s", err)
 		}
 		bar.Finish()
 		fmt.Print("\n")

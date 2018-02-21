@@ -5,11 +5,12 @@ import (
 	"fmt"
 	"os"
 
-	log "github.com/Sirupsen/logrus"
+	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
 )
 
+var logCli = logrus.WithField("module", "git")
 // GitCheckoutConfig is input for Git.Checkout
 type GitCheckoutConfig struct {
 	Repo, Branch, RelPath, Image string
@@ -34,15 +35,14 @@ func (g *Git) Checkout(cfg *GitCheckoutConfig) (string, error) {
 	name := fmt.Sprintf("data_%x", md5.Sum([]byte(cfg.Repo+cfg.Branch)))
 
 	if g.c.ContainerExists(name) {
-		log.Infof("Existing data container found: %s", name)
+		logCli.WithField("name", name).Info("Existing data container found")
 
 		if _, err := g.Pull(name); err != nil {
-			log.Warnf("Git pull error: %s", err)
-			return name, err
+			return name, fmt.Errorf("Git failed to pull: %s", err)
 		}
 		return name, nil
 	} else {
-		log.WithFields(log.Fields{
+		logCli.WithFields(logrus.Fields{
 			"git_url": cfg.Repo,
 			"image":   g.Image,
 		}).Info("Creating data containers")
@@ -71,7 +71,6 @@ func (g *Git) Checkout(cfg *GitCheckoutConfig) (string, error) {
 		id, err := g.c.StartContainer(false, name)
 
 		if err != nil {
-			return "", fmt.Errorf("Failed to create data container for %s: %s", cfg.Repo, err)
 		}
 		return id, nil
 	}
