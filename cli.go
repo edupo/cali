@@ -65,17 +65,22 @@ func (t *Task) SetInitFunc(f TaskFunc) {
 }
 
 // SetDefaults sets the default host config for a task container
-// Mounts the PWD to /tmp/workspace
-// Mounts your ~/.aws directory to /root - change this if your image runs as a non-root user
 // Sets /tmp/workspace as the workdir
+// Publishes HOST_USER_ID and HOST_GROUP_ID in the container
+// Mounts the PWD to /tmp/workspace
 // Configures git
+// Set the default command
 func (t *Task) SetDefaults(args []string) error {
 	t.SetWorkDir(workdir)
 	awsDir, err := t.Bind("~/.aws", "/root/.aws")
+
+	u, err := user.Current()
 	if err != nil {
-		return err
+		log.Fatalf("Failed to find uid for user: %s", err)
 	}
 	t.AddBinds([]string{awsDir})
+	t.AddEnv("HOST_USER_ID", u.Uid)
+	t.AddEnv("HOST_GROUP_ID", u.Gid)
 
 	err = t.BindFromGit(gitCfg, func() error {
 		pwd, err := t.Bind("./", workdir)
