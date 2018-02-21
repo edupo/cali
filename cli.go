@@ -3,10 +3,10 @@ package cali
 import (
 	"fmt"
 	"os"
+	"runtime"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/spf13/cobra"
-	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
 )
 
@@ -45,76 +45,6 @@ var defaultTaskFunc TaskFunc = func(t *Task, args []string) {
 
 // cobraFunc represents the function signiture which cobra uses for it's Run, PreRun, PostRun etc.
 type cobraFunc func(cmd *cobra.Command, args []string)
-
-// command is the actual command run by the cli and essentially just wraps cobra.Command and
-// has an associated Task
-type command struct {
-	name    string
-	RunTask *Task
-	cobra   *cobra.Command
-}
-
-// newCommand returns an freshly initialised command
-func newCommand(n string) *command {
-	return &command{
-		name:  n,
-		cobra: &cobra.Command{Use: n},
-	}
-}
-
-// SetShort sets the short description of the command
-func (c *command) SetShort(s string) {
-	c.cobra.Short = s
-}
-
-// SetLong sets the long description of the command
-func (c *command) SetLong(l string) {
-	c.cobra.Long = l
-}
-
-// setPreRun sets the cobra.Command.PreRun function
-func (c *command) setPreRun(f cobraFunc) {
-	c.cobra.PreRun = f
-}
-
-// setRun sets the cobra.Command.Run function
-func (c *command) setRun(f cobraFunc) {
-	c.cobra.Run = f
-}
-
-// Task is something executed by a command
-func (c *command) Task(def interface{}) *Task {
-	t := &Task{DockerClient: NewDockerClient()}
-
-	switch d := def.(type) {
-	case string:
-		t.SetImage(d)
-		t.SetFunc(defaultTaskFunc)
-	case TaskFunc:
-		t.SetFunc(d)
-	default:
-		// Slightly unidiomatic to blow up here rather than return an error
-		// choosing to so as to keep the API uncluttered and also if you get here it's
-		// an implementation error rather than a runtime error.
-		fmt.Println("Unknown Task type. Must either be an image (string) or a TaskFunc")
-		os.Exit(exitCodeApiError)
-	}
-	c.RunTask = t
-	return t
-}
-
-// Flags returns the FlagSet for the command and is used to set new flags for the command
-func (c *command) Flags() *flag.FlagSet {
-	return c.cobra.PersistentFlags()
-}
-
-// BindFlags needs to be called after all flags for a command have been defined
-func (c *command) BindFlags() {
-	c.Flags().VisitAll(func(f *flag.Flag) {
-		myFlags.BindPFlag(f.Name, f)
-		myFlags.SetDefault(f.Name, f.DefValue)
-	})
-}
 
 // commands is a set of commands
 type commands map[string]*command
