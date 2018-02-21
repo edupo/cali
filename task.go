@@ -5,6 +5,8 @@ import (
 	"strings"
 	"path/filepath"
 	"fmt"
+	"runtime"
+	"github.com/jfrogdev/jfrog-cli-go/jfrog-cli/artifactory/utils/docker"
 )
 
 // Task is the action performed when it's parent command is run
@@ -59,7 +61,11 @@ func (t *Task) SetDefaults(args []string) error {
 
 // BindDocker - Task util (convenience) to Bind the docker socket.
 func (t *Task) BindDocker() error {
-	err := t.Bind("/var/run/docker.sock", "/var/run/docker.sock")
+	dockerSocket := "/var/run/docker.sock"
+	if runtime.GOOS == "windows" {
+		dockerSocket = "//var/run/docker.sock"
+	}
+	err := t.Bind(dockerSocket, "/var/run/docker.sock")
 	if err != nil {
 		return err
 	}
