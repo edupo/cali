@@ -8,58 +8,44 @@ import (
 	"github.com/spf13/pflag"
 )
 
-// command is the actual command run by the cli and essentially just wraps cobra.Command and
+// Command is the actual command run by the cli and essentially just wraps cobra.Command and
 // has an associated Task
-type command struct {
+type Command struct {
 	name    string
 	RunTask *Task
 	cobra   *cobra.Command
 }
 
-// Command returns a brand new command attached to it's parent cli
-func (c *cli) Command(n string) *command {
-	cmd := newCommand(n)
-	c.cmds[n] = cmd
-	cmd.setPreRun(func(c *cobra.Command, args []string) {
-		cmd.RunTask.init(cmd.RunTask, args)
-	})
-	cmd.setRun(func(c *cobra.Command, args []string) {
-		cmd.RunTask.f(cmd.RunTask, args)
-	})
-	c.cobra.AddCommand(cmd.cobra)
-	return cmd
-}
-
-// newCommand returns an freshly initialised command
-func newCommand(n string) *command {
-	return &command{
+// NewCommand returns an freshly initialised command
+func NewCommand(n string) *Command {
+	return &Command{
 		name:  n,
 		cobra: &cobra.Command{Use: n},
 	}
 }
 
 // SetShort sets the short description of the command
-func (c *command) SetShort(s string) {
+func (c *Command) SetShort(s string) {
 	c.cobra.Short = s
 }
 
 // SetLong sets the long description of the command
-func (c *command) SetLong(l string) {
+func (c *Command) SetLong(l string) {
 	c.cobra.Long = l
 }
 
 // setPreRun sets the cobra.Command.PreRun function
-func (c *command) setPreRun(f cobraFunc) {
+func (c *Command) setPreRun(f cobraFunc) {
 	c.cobra.PreRun = f
 }
 
 // setRun sets the cobra.Command.Run function
-func (c *command) setRun(f cobraFunc) {
+func (c *Command) setRun(f cobraFunc) {
 	c.cobra.Run = f
 }
 
 // Task is something executed by a command
-func (c *command) Task(def interface{}) *Task {
+func (c *Command) Task(def interface{}) *Task {
 	t := &Task{DockerClient: NewDockerClient()}
 
 	switch d := def.(type) {
@@ -73,22 +59,21 @@ func (c *command) Task(def interface{}) *Task {
 		// choosing to so as to keep the API uncluttered and also if you get here it's
 		// an implementation error rather than a runtime error.
 		fmt.Println("Unknown Task type. Must either be an image (string) or a TaskFunc")
-		os.Exit(EXIT_CODE_API_ERROR)
+		os.Exit(exitCodeAPIError)
 	}
 	c.RunTask = t
 	return t
 }
 
 // Flags returns the FlagSet for the command and is used to set new flags for the command
-func (c *command) Flags() *pflag.FlagSet {
+func (c *Command) Flags() *pflag.FlagSet {
 	return c.cobra.PersistentFlags()
 }
 
 // BindFlags needs to be called after all flags for a command have been defined
-func (c *command) BindFlags() {
+func (c *Command) BindFlags() {
 	c.Flags().VisitAll(func(f *pflag.Flag) {
 		myFlags.BindPFlag(f.Name, f)
 		myFlags.SetDefault(f.Name, f.DefValue)
 	})
 }
-

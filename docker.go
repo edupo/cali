@@ -17,11 +17,12 @@ import (
 	"golang.org/x/crypto/ssh/terminal"
 	"golang.org/x/net/context"
 	pb "gopkg.in/cheggaaa/pb.v1"
+	"syscall"
 )
 
 // Event holds the json structure for Docker API events
 type Event struct {
-	Id     string `json:"id"`
+	ID     string `json:"id"`
 	Status string `json:"status"`
 }
 
@@ -33,7 +34,7 @@ type ProgressDetail struct {
 
 // CreateResponse is the response from Docker API when pulling an image
 type CreateResponse struct {
-	Id             string         `json:"id"`
+	ID             string         `json:"id"`
 	Status         string         `json:"status"`
 	ProgressDetail ProgressDetail `json:"progressDetail"`
 	Progress       string         `json:"progress,omitempty"`
@@ -45,10 +46,9 @@ type DockerClient struct {
 	HostConf *container.HostConfig
 	NetConf  *network.NetworkingConfig
 	Conf     *container.Config
-	running  []string
 }
 
-// Init initialises the client
+// InitDocker initialises the client
 func (c *DockerClient) InitDocker() error {
 	var cli *client.Client
 
@@ -104,7 +104,7 @@ func (c *DockerClient) AddBind(bnd string) {
 	c.HostConf.Binds = append(c.HostConf.Binds, bnd)
 }
 
-// AddEnvs adds an environment variable to the HostConfig
+// AddEnv adds an environment variable to the HostConfig
 func (c *DockerClient) AddEnv(key, value string) {
 	c.Conf.Env = append(c.Conf.Env, fmt.Sprintf("%s=%s", key, value))
 }
@@ -173,7 +173,7 @@ func (c *DockerClient) BindFromGit(cfg *GitCheckoutConfig, noGit func() error) e
 		c.HostConf.VolumesFrom = []string{id}
 
 		if cfg.RelPath != "" {
-			c.SetWorkDir(path.Join(workdir, cfg.RelPath))
+			c.SetWorkDir(path.Join(workDir, cfg.RelPath))
 		}
 	} else {
 		// Execute callback
@@ -202,7 +202,7 @@ func (c *DockerClient) StartContainer(rm bool, name string) (string, error) {
 	// Clean up on ctrl+c
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, os.Interrupt)
-	signal.Notify(ch, os.Kill)
+	signal.Notify(ch, syscall.SIGTERM)
 
 	go func() {
 		<-ch
@@ -238,7 +238,9 @@ func (c *DockerClient) StartContainer(rm bool, name string) (string, error) {
 			Stderr: true,
 		}
 		hijack, err := c.Cli.ContainerAttach(context.Background(), resp.ID, ca)
-		defer hijack.Conn.Close()
+		if err == nil {
+			defer hijack.Conn.Close()
+		}
 
 		if err != nil {
 			return resp.ID, fmt.Errorf("Failed to start container: %s", err)
@@ -318,11 +320,7 @@ func (c *DockerClient) StartContainer(rm bool, name string) (string, error) {
 func (c *DockerClient) ContainerExists(name string) bool {
 	_, err := c.Cli.ContainerInspect(context.Background(), name)
 
-	// Fairly safe assumption
-	if err != nil {
-		return false
-	}
-	return true
+	return err == nil
 }
 
 // DeleteContainer - Delete a container

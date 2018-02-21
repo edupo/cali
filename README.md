@@ -1,5 +1,6 @@
 # Cali - ComposAble deveLopment and cI
 ---
+[![Build Status](https://travis-ci.org/edupo/cali.svg?branch=master)](https://travis-ci.org/edupo/cali)
 
 ## Overview
 

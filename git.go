@@ -28,7 +28,7 @@ type Git struct {
 	Image string
 }
 
-// GitCheckout will create and start a container, checkout repo and leave container stopped
+// Checkout will create and start a container, checkout repo and leave container stopped
 // so volume can be imported
 func (g *Git) Checkout(cfg *GitCheckoutConfig) (string, error) {
 	name := fmt.Sprintf("data_%x", md5.Sum([]byte(cfg.Repo+cfg.Branch)))
@@ -41,42 +41,43 @@ func (g *Git) Checkout(cfg *GitCheckoutConfig) (string, error) {
 			return name, err
 		}
 		return name, nil
-	} else {
-		log.WithFields(log.Fields{
-			"git_url": cfg.Repo,
-			"image":   g.Image,
-		}).Info("Creating data containers")
-
-		co := container.Config{
-			Cmd:          []string{"clone", cfg.Repo, "-b", cfg.Branch, "--depth", "1", "."},
-			Image:        gitImage,
-			Tty:          true,
-			AttachStdout: true,
-			AttachStderr: true,
-			WorkingDir:   "/tmp/workspace",
-			Entrypoint:   []string{"git"},
-		}
-		hc := container.HostConfig{
-			Binds: []string{
-				"/tmp/workspace",
-				fmt.Sprintf("%s/.ssh:/root/.ssh", os.Getenv("HOME")),
-			},
-		}
-		nc := network.NetworkingConfig{}
-
-		g.c.SetConf(&co)
-		g.c.SetHostConf(&hc)
-		g.c.SetNetConf(&nc)
-
-		id, err := g.c.StartContainer(false, name)
-
-		if err != nil {
-			return "", fmt.Errorf("Failed to create data container for %s: %s", cfg.Repo, err)
-		}
-		return id, nil
 	}
+
+	log.WithFields(log.Fields{
+		"git_url": cfg.Repo,
+		"image":   g.Image,
+	}).Info("Creating data containers")
+
+	co := container.Config{
+		Cmd:          []string{"clone", cfg.Repo, "-b", cfg.Branch, "--depth", "1", "."},
+		Image:        gitImage,
+		Tty:          true,
+		AttachStdout: true,
+		AttachStderr: true,
+		WorkingDir:   "/tmp/workspace",
+		Entrypoint:   []string{"git"},
+	}
+	hc := container.HostConfig{
+		Binds: []string{
+			"/tmp/workspace",
+			fmt.Sprintf("%s/.ssh:/root/.ssh", os.Getenv("HOME")),
+		},
+	}
+	nc := network.NetworkingConfig{}
+
+	g.c.SetConf(&co)
+	g.c.SetHostConf(&hc)
+	g.c.SetNetConf(&nc)
+
+	id, err := g.c.StartContainer(false, name)
+
+	if err != nil {
+		return "", fmt.Errorf("Failed to create data container for %s: %s", cfg.Repo, err)
+	}
+	return id, nil
 }
 
+// Pull a git repository
 func (g *Git) Pull(name string) (string, error) {
 	co := container.Config{
 		Cmd:          []string{"pull"},

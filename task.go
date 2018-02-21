@@ -1,10 +1,10 @@
 package cali
 
 import (
-	"strings"
-	"os/user"
 	"fmt"
+	"os/user"
 	"path/filepath"
+	"strings"
 )
 
 // Task is the action performed when it's parent command is run
@@ -32,7 +32,7 @@ func (t *Task) SetInitFunc(f TaskFunc) {
 // Sets /tmp/workspace as the workdir
 // Configures git
 func (t *Task) SetDefaults(args []string) error {
-	t.SetWorkDir(workdir)
+	t.SetWorkDir(workDir)
 	awsDir, err := t.Bind("~/.aws", "/root/.aws")
 	if err != nil {
 		return err
@@ -40,7 +40,7 @@ func (t *Task) SetDefaults(args []string) error {
 	t.AddBinds([]string{awsDir})
 
 	err = t.BindFromGit(gitCfg, func() error {
-		pwd, err := t.Bind("./", workdir)
+		pwd, err := t.Bind("./", workDir)
 		if err != nil {
 			return err
 		}
@@ -65,7 +65,7 @@ func (t *Task) Bind(src, dst string) (string, error) {
 		usr, err := user.Current()
 
 		if err != nil {
-			return expanded, fmt.Errorf("Error expanding bind path: %s")
+			return expanded, fmt.Errorf("Error expanding bind path: %s", src)
 		}
 		expanded = filepath.Join(usr.HomeDir, src[2:])
 	} else {
@@ -74,8 +74,7 @@ func (t *Task) Bind(src, dst string) (string, error) {
 	expanded, err := filepath.Abs(expanded)
 
 	if err != nil {
-		return expanded, fmt.Errorf("Error expanding bind path: %s")
+		return expanded, fmt.Errorf("Error expanding bind path: %s", src)
 	}
 	return fmt.Sprintf("%s:%s", expanded, dst), nil
 }
-
