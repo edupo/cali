@@ -11,10 +11,10 @@ import (
 )
 
 const (
-	EXIT_CODE_RUNTIME_ERROR = 1
-	EXIT_CODE_API_ERROR     = 2
+	exitCodeRuntimeError = 1
+	exitCodeAPIError     = 2
 
-	workdir = "/tmp/workspace"
+	workDir = "/tmp/workspace"
 )
 
 var (
@@ -45,22 +45,22 @@ var defaultTaskFunc TaskFunc = func(t *Task, args []string) {
 type cobraFunc func(cmd *cobra.Command, args []string)
 
 // commands is a set of commands
-type commands map[string]*command
+type commands map[string]*Command
 
-// cli is the application itself
-type cli struct {
+// Cli is the application itself
+type Cli struct {
 	name    string
 	cfgFile *string
 	cmds    commands
-	*command
+	*Command
 }
 
-// Cli returns a brand new cli
-func Cli(n string) *cli {
-	c := cli{
+// NewCli returns a brand new cli
+func NewCli(n string) *Cli {
+	c := Cli{
 		name:    n,
 		cmds:    make(commands),
-		command: newCommand(n),
+		Command: NewCommand(n),
 	}
 	c.cobra.PersistentPreRun = func(cmd *cobra.Command, args []string) {
 		if debug {
@@ -75,14 +75,28 @@ func Cli(n string) *cli {
 	return &c
 }
 
+// AddCommand returns a brand new command attached to it's parent cli
+func (c *Cli) AddCommand(n string) *Command {
+	cmd := NewCommand(n)
+	c.cmds[n] = cmd
+	cmd.setPreRun(func(c *cobra.Command, args []string) {
+		cmd.RunTask.init(cmd.RunTask, args)
+	})
+	cmd.setRun(func(c *cobra.Command, args []string) {
+		cmd.RunTask.f(cmd.RunTask, args)
+	})
+	c.cobra.AddCommand(cmd.cobra)
+	return cmd
+}
+
 // FlagValues returns the wrapped viper object allowing the API consumer to use methods
 // like GetString to get values from config
-func (c *cli) FlagValues() *viper.Viper {
+func (c *Cli) FlagValues() *viper.Viper {
 	return myFlags
 }
 
 // initFlags does the intial setup of the root command's persistent flags
-func (c *cli) initFlags() {
+func (c *Cli) initFlags() {
 	var cfg string
 	txt := fmt.Sprintf("config file (default is $HOME/.%s.yaml)", c.name)
 	c.cobra.PersistentFlags().StringVar(&cfg, "config", "", txt)
@@ -123,7 +137,7 @@ func (c *cli) initFlags() {
 }
 
 // initConfig does the initial setup of viper
-func (c *cli) initConfig() {
+func (c *Cli) initConfig() {
 	if *c.cfgFile != "" {
 		myFlags.SetConfigFile(*c.cfgFile)
 	} else {
@@ -139,12 +153,12 @@ func (c *cli) initConfig() {
 }
 
 // Start the fans please!
-func (c *cli) Start() {
+func (c *Cli) Start() {
 	c.initFlags()
 	cobra.OnInitialize(c.initConfig)
 
 	if err := c.cobra.Execute(); err != nil {
 		fmt.Println(err)
-		os.Exit(EXIT_CODE_RUNTIME_ERROR)
+		os.Exit(exitCodeRuntimeError)
 	}
 }
