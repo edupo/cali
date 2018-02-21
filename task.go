@@ -6,7 +6,6 @@ import (
 	"path/filepath"
 	"fmt"
 	"runtime"
-	"github.com/jfrogdev/jfrog-cli-go/jfrog-cli/artifactory/utils/docker"
 )
 
 // Task is the action performed when it's parent command is run
