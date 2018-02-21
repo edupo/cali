@@ -17,10 +17,10 @@ import (
 var cliLog = logrus.WithField("module", "cli")
 
 const (
-	EXIT_CODE_RUNTIME_ERROR = 1
-	EXIT_CODE_API_ERROR     = 2
+	exitCodeRuntimeError = 1
+	exitCodeApiError     = 2
 
-	workdir = "/tmp/workspace"
+	workDir = "/tmp/workspace"
 )
 
 var (
@@ -73,7 +73,7 @@ func (t *Task) SetInitFunc(f TaskFunc) {
 //  - Configures git
 //  - Set the default command
 func (t *Task) SetDefaults(args []string) error {
-	t.SetWorkDir(workdir)
+	t.SetWorkDir(workDir)
 
 	u, err := user.Current()
 	if err != nil {
@@ -83,7 +83,7 @@ func (t *Task) SetDefaults(args []string) error {
 	t.AddEnv("HOST_GROUP_ID", u.Gid)
 
 	err = t.BindFromGit(gitCfg, func() error {
-		pwd, err := t.Bind("./", workdir)
+		pwd, err := t.Bind("./", workDir)
 		if err != nil {
 			return err
 		}
@@ -178,7 +178,7 @@ func (c *command) Task(def interface{}) *Task {
 		// choosing to so as to keep the API uncluttered and also if you get here it's
 		// an implementation error rather than a runtime error.
 		fmt.Println("Unknown Task type. Must either be an image (string) or a TaskFunc")
-		os.Exit(EXIT_CODE_API_ERROR)
+		os.Exit(exitCodeApiError)
 	}
 	c.RunTask = t
 	return t
@@ -315,6 +315,6 @@ func (c *cli) Start() {
 
 	if err := c.cobra.Execute(); err != nil {
 		fmt.Println(err)
-		os.Exit(EXIT_CODE_RUNTIME_ERROR)
+		os.Exit(exitCodeRuntimeError)
 	}
 }

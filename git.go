@@ -38,7 +38,7 @@ func (g *Git) Checkout(cfg *GitCheckoutConfig) (string, error) {
 		logCli.WithField("name", name).Info("Existing data container found")
 
 		if _, err := g.Pull(name); err != nil {
-			return name, fmt.Errorf("Git failed to pull: %s", err)
+			return name, fmt.Errorf("git failed to pull: %s", err)
 		}
 		return name, nil
 	} else {
