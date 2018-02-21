@@ -83,11 +83,10 @@ func (t *Task) SetDefaults(args []string) error {
 	t.AddEnv("HOST_GROUP_ID", u.Gid)
 
 	err = t.BindFromGit(gitCfg, func() error {
-		pwd, err := t.Bind("./", workDir)
+		err := t.Bind("./", workDir)
 		if err != nil {
 			return err
 		}
-		t.AddBinds([]string{pwd})
 		return nil
 	})
 	if err != nil {
@@ -98,30 +97,36 @@ func (t *Task) SetDefaults(args []string) error {
 	return nil
 }
 
-// Bind is a utility function which will return the correctly formatted string when given a source
-// and destination directory
-//
-// The ~ symbol and relative paths will be correctly expanded depending on the host OS
-func (t *Task) Bind(src, dst string) (string, error) {
+// BindDocker - Task util (convenience) to Bind the docker socket.
+func (t *Task) BindDocker() error {
+	err := t.Bind("/var/run/docker.sock", "/var/run/docker.sock")
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// Bind - Task util to add a Bind. '~' in src will be expanded according to the current user for convenience.
+func (t *Task) Bind(src, dst string) error {
 	var expanded string
 
 	if strings.HasPrefix(src, "~") {
 		usr, err := user.Current()
-
 		if err != nil {
-			return expanded, fmt.Errorf("CLI failed to expand bind path: %s", err)
+			return err
 		}
 		expanded = filepath.Join(usr.HomeDir, src[2:])
 	} else {
 		expanded = src
 	}
-	expanded, err := filepath.Abs(expanded)
 
+	expanded, err := filepath.Abs(expanded)
 	if err != nil {
-		return expanded, fmt.Errorf("CLI failed to expand bind path: %s", err)
-		return expanded, err
+		return err
 	}
-	return fmt.Sprintf("%s:%s", expanded, dst), nil
+
+	t.AddBind(fmt.Sprintf("%s:%s", expanded, dst))
+	return nil
 }
 
 // cobraFunc represents the function signiture which cobra uses for it's Run, PreRun, PostRun etc.
