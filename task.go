@@ -81,15 +81,14 @@ func (t *Task) Bind(src, dst string) (string, error) {
 }
 
 // BindDocker - Task util (convenience) to Bind the docker socket.
-func (t *Task) BindDocker() error {
+func (t *Task) BindDocker() {
 	dockerSocket := "/var/run/docker.sock"
 	if runtime.GOOS == "windows" {
 		dockerSocket = "//var/run/docker.sock"
 	}
 	str, err := t.Bind(dockerSocket, "/var/run/docker.sock")
 	if err != nil {
-		return err
+		panic(err)
 	}
 	t.AddBind(str)
-	return nil
 }
