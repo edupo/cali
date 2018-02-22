@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -77,4 +78,18 @@ func (t *Task) Bind(src, dst string) (string, error) {
 		return expanded, fmt.Errorf("Error expanding bind path: %s", src)
 	}
 	return fmt.Sprintf("%s:%s", expanded, dst), nil
+}
+
+// BindDocker - Task util (convenience) to Bind the docker socket.
+func (t *Task) BindDocker() error {
+	dockerSocket := "/var/run/docker.sock"
+	if runtime.GOOS == "windows" {
+		dockerSocket = "//var/run/docker.sock"
+	}
+	str, err := t.Bind(dockerSocket, "/var/run/docker.sock")
+	if err != nil {
+		return err
+	}
+	t.AddBind(str)
+	return nil
 }
