@@ -9,6 +9,8 @@ import (
 	"os/signal"
 	"path"
 
+	"syscall"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -17,7 +19,6 @@ import (
 	"golang.org/x/crypto/ssh/terminal"
 	"golang.org/x/net/context"
 	pb "gopkg.in/cheggaaa/pb.v1"
-	"syscall"
 )
 
 // Event holds the json structure for Docker API events
@@ -193,8 +194,8 @@ func (c *DockerClient) StartContainer(rm bool, name string) (string, error) {
 	if err := c.PullImage(c.Conf.Image); err != nil {
 		return "", fmt.Errorf("Failed to fetch image: %s", err)
 	}
-	resp, err := c.Cli.ContainerCreate(context.Background(), c.Conf, c.HostConf, c.NetConf, name)
 
+	resp, err := c.Cli.ContainerCreate(context.Background(), c.Conf, c.HostConf, c.NetConf, name)
 	if err != nil {
 		return "", fmt.Errorf("Failed to create container: %s", err)
 	}
