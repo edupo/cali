@@ -80,7 +80,9 @@ func (c *Cli) AddCommand(n string) *Command {
 	cmd := NewCommand(n)
 	c.cmds[n] = cmd
 	cmd.setPreRun(func(c *cobra.Command, args []string) {
-		cmd.RunTask.init(cmd.RunTask, args)
+		if cmd.RunTask.init == nil {
+			cmd.RunTask.init(cmd.RunTask, args)
+		}
 	})
 	cmd.setRun(func(c *cobra.Command, args []string) {
 		cmd.RunTask.f(cmd.RunTask, args)
