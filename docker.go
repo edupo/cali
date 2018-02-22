@@ -56,7 +56,7 @@ func (c *DockerClient) InitDocker() error {
 	cli, err := client.NewClient(dockerHost, "v1.22", nil, defaultHeaders)
 
 	if err != nil {
-		return fmt.Errorf("Could not connect to Docker daemon on %s: %s", dockerHost, err)
+		return err
 	}
 	c.Cli = cli
 	return nil
@@ -191,12 +191,12 @@ func (c *DockerClient) StartContainer(rm bool, name string) (string, error) {
 	}).Debug("Creating new container")
 
 	if err := c.PullImage(c.Conf.Image); err != nil {
-		return "", fmt.Errorf("Failed to fetch image: %s", err)
+		return "", err
 	}
 	resp, err := c.Cli.ContainerCreate(context.Background(), c.Conf, c.HostConf, c.NetConf, name)
 
 	if err != nil {
-		return "", fmt.Errorf("Failed to create container: %s", err)
+		return "", err
 	}
 
 	// Clean up on ctrl+c
@@ -243,7 +243,7 @@ func (c *DockerClient) StartContainer(rm bool, name string) (string, error) {
 		}
 
 		if err != nil {
-			return resp.ID, fmt.Errorf("Failed to start container: %s", err)
+			return resp.ID, err
 		}
 		oldState, err := terminal.MakeRaw(fd)
 		defer terminal.Restore(fd, oldState)
@@ -253,7 +253,7 @@ func (c *DockerClient) StartContainer(rm bool, name string) (string, error) {
 		}
 
 		if err := c.Cli.ContainerStart(context.Background(), resp.ID, types.ContainerStartOptions{}); err != nil {
-			return resp.ID, fmt.Errorf("Failed to start container: %s", err)
+			return resp.ID, err
 		}
 
 		// Start stdin reader
@@ -269,7 +269,7 @@ func (c *DockerClient) StartContainer(rm bool, name string) (string, error) {
 		tw, th, _ := terminal.GetSize(fd)
 
 		if err := c.Cli.ContainerResize(context.Background(), resp.ID, types.ResizeOptions{Height: uint(th), Width: uint(tw)}); err != nil {
-			return resp.ID, fmt.Errorf("Failed to start container: %s", err)
+			return resp.ID, err
 		}
 
 		// Start stdout writer
@@ -279,7 +279,7 @@ func (c *DockerClient) StartContainer(rm bool, name string) (string, error) {
 	} else {
 		// No terminal, then just pump out the log output
 		if err := c.Cli.ContainerStart(context.Background(), resp.ID, types.ContainerStartOptions{}); err != nil {
-			return resp.ID, fmt.Errorf("Failed to start container: %s", err)
+			return resp.ID, err
 		}
 		log.WithFields(log.Fields{
 			"image": c.Conf.Image,
@@ -289,29 +289,29 @@ func (c *DockerClient) StartContainer(rm bool, name string) (string, error) {
 		ls, err := c.Cli.ContainerLogs(context.Background(), resp.ID, logOptions)
 
 		if err != nil {
-			return resp.ID, fmt.Errorf("Failed to get container logs: %s", err)
+			return resp.ID, err
 		}
 
 		_, err = io.Copy(os.Stdout, ls)
 		if err != nil {
-			return resp.ID, fmt.Errorf("Failed to get container logs: %s", err)
+			return resp.ID, err
 		}
 	}
 	// Container has finished running. Get its exit code
 	inspect, err := c.Cli.ContainerInspect(context.Background(), resp.ID)
 	if err != nil {
-		return resp.ID, fmt.Errorf("Failed to inspect Docker container: %s", err)
+		return resp.ID, err
 	}
 
 	if rm {
 
 		if err = c.DeleteContainer(resp.ID); err != nil {
-			return resp.ID, fmt.Errorf("Failed to remove container: %s", err)
+			return resp.ID, err
 		}
 	}
 
 	if inspect.State.ExitCode != 0 {
-		return resp.ID, fmt.Errorf("Non-zero exit status from Docker container")
+		return resp.ID, fmt.Errorf("non-zero exit status from Docker container")
 	}
 	return resp.ID, nil
 }
@@ -325,24 +325,16 @@ func (c *DockerClient) ContainerExists(name string) bool {
 
 // DeleteContainer - Delete a container
 func (c *DockerClient) DeleteContainer(id string) error {
-	log.WithFields(log.Fields{
-		"id": id[0:12],
-	}).Debug("Removing container")
+	log.WithField("id", id[0:12]).Debug("Removing container")
 
-	if err := c.Cli.ContainerRemove(context.Background(), id, types.ContainerRemoveOptions{Force: true}); err != nil {
-		return fmt.Errorf("Failed to remove container: %s", err)
-	}
-	return nil
+	return c.Cli.ContainerRemove(context.Background(), id, types.ContainerRemoveOptions{Force: true})
 }
 
 // ImageExists determines if an image exist locally
 func (c *DockerClient) ImageExists(image string) bool {
-	log.WithFields(log.Fields{
-		"image": image,
-	}).Debug("Checking if image exists locally")
+	log.WithField("image", image).Debug("Checking if image exists locally")
 
 	_, _, err := c.Cli.ImageInspectWithRaw(context.Background(), image)
-
 	// Safe assumption?
 	if err != nil {
 		log.WithFields(log.Fields{
@@ -357,14 +349,11 @@ func (c *DockerClient) ImageExists(image string) bool {
 func (c *DockerClient) PullImage(image string) error {
 
 	if !c.ImageExists(image) {
-		log.WithFields(log.Fields{
-			"image": image,
-		}).Info("Pulling image layers... please wait")
+		log.WithField("image", image).Info("Pulling image layers... please wait")
 
 		resp, err := c.Cli.ImagePull(context.Background(), image, types.ImagePullOptions{})
-
 		if err != nil {
-			return fmt.Errorf("API could not fetch \"%s\": %s", image, err)
+			return err
 		}
 		scanner := bufio.NewScanner(resp)
 		var cr CreateResponse
@@ -383,7 +372,7 @@ func (c *DockerClient) PullImage(image string) error {
 			byt := []byte(txt)
 
 			if err := json.Unmarshal(byt, &cr); err != nil {
-				return fmt.Errorf("Error decoding json from create image API: %s", err)
+				return err
 			}
 
 			if cr.Status == "Downloading" {
@@ -400,7 +389,7 @@ func (c *DockerClient) PullImage(image string) error {
 		}
 
 		if err := scanner.Err(); err != nil {
-			return fmt.Errorf("Failed to get logs: %s", err)
+			return err
 		}
 		bar.Finish()
 		fmt.Print("\n")
