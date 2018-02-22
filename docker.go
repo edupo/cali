@@ -9,6 +9,8 @@ import (
 	"os/signal"
 	"path"
 
+	"syscall"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -17,7 +19,6 @@ import (
 	"golang.org/x/crypto/ssh/terminal"
 	"golang.org/x/net/context"
 	pb "gopkg.in/cheggaaa/pb.v1"
-	"syscall"
 )
 
 // Event holds the json structure for Docker API events
@@ -158,27 +159,28 @@ func (c *DockerClient) BindFromGit(cfg *GitCheckoutConfig, noGit func() error) e
 		return err
 	}
 
-	if cfg.Repo != "" {
-		// Build code from data volume
-		git := cli.Git()
-
-		if cfg.Image != "" {
-			git.Image = cfg.Image
-		}
-		id, err := git.Checkout(cfg)
-
-		if err != nil {
-			return err
-		}
-		c.HostConf.VolumesFrom = []string{id}
-
-		if cfg.RelPath != "" {
-			c.SetWorkDir(path.Join(workDir, cfg.RelPath))
-		}
-	} else {
+	if cfg.Repo == "" {
 		// Execute callback
-		noGit()
+		return noGit()
 	}
+
+	// Build code from data volume
+	git := cli.Git()
+
+	if cfg.Image != "" {
+		git.Image = cfg.Image
+	}
+	id, err := git.Checkout(cfg)
+
+	if err != nil {
+		return err
+	}
+	c.HostConf.VolumesFrom = []string{id}
+
+	if cfg.RelPath != "" {
+		c.SetWorkDir(path.Join(workDir, cfg.RelPath))
+	}
+
 	return nil
 }
 
@@ -193,8 +195,8 @@ func (c *DockerClient) StartContainer(rm bool, name string) (string, error) {
 	if err := c.PullImage(c.Conf.Image); err != nil {
 		return "", fmt.Errorf("Failed to fetch image: %s", err)
 	}
-	resp, err := c.Cli.ContainerCreate(context.Background(), c.Conf, c.HostConf, c.NetConf, name)
 
+	resp, err := c.Cli.ContainerCreate(context.Background(), c.Conf, c.HostConf, c.NetConf, name)
 	if err != nil {
 		return "", fmt.Errorf("Failed to create container: %s", err)
 	}
@@ -213,6 +215,7 @@ func (c *DockerClient) StartContainer(rm bool, name string) (string, error) {
 		}
 		os.Exit(1)
 	}()
+
 	log.WithFields(log.Fields{
 		"image": c.Conf.Image,
 		"id":    resp.ID[0:12],
@@ -226,7 +229,11 @@ func (c *DockerClient) StartContainer(rm bool, name string) (string, error) {
 		logBuffer := bufio.NewWriter(os.Stdout)
 		log.SetOutput(logBuffer)
 		// Write buffer to stdout once detatched from container
-		defer logBuffer.Flush()
+		defer func() {
+			if err := logBuffer.Flush(); err != nil {
+				log.Error(err)
+			}
+		}()
 		// Reset logs to stdout after conection is closed
 		defer log.SetOutput(os.Stdout)
 
@@ -239,14 +246,22 @@ func (c *DockerClient) StartContainer(rm bool, name string) (string, error) {
 		}
 		hijack, err := c.Cli.ContainerAttach(context.Background(), resp.ID, ca)
 		if err == nil {
-			defer hijack.Conn.Close()
+			defer func() {
+				if err := hijack.Conn.Close(); err != nil {
+					log.Error(err)
+				}
+			}()
 		}
 
 		if err != nil {
 			return resp.ID, fmt.Errorf("Failed to start container: %s", err)
 		}
 		oldState, err := terminal.MakeRaw(fd)
-		defer terminal.Restore(fd, oldState)
+		defer func() {
+			if err := terminal.Restore(fd, oldState); err != nil {
+				log.Error(err)
+			}
+		}()
 
 		if err != nil {
 			panic(err)
@@ -258,8 +273,16 @@ func (c *DockerClient) StartContainer(rm bool, name string) (string, error) {
 
 		// Start stdin reader
 		go func() {
-			defer terminal.Restore(fd, oldState)
-			defer hijack.Conn.Close()
+			defer func() {
+				if err := terminal.Restore(fd, oldState); err != nil {
+					log.Error(err)
+				}
+			}()
+			defer func() {
+				if err := hijack.Conn.Close(); err != nil {
+					log.Error(err)
+				}
+			}()
 
 			if _, err := io.Copy(hijack.Conn, os.Stdin); err != nil {
 				log.Errorf("Write error: %s", err)

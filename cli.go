@@ -111,31 +111,45 @@ func (c *Cli) initFlags() {
 		dockerSocket = "unix:///var/run/docker.sock"
 	}
 	c.Flags().StringVarP(&dockerHost, "docker-host", "H", dockerSocket, "URI of Docker Daemon")
-	myFlags.BindPFlag("docker-host", c.Flags().Lookup("docker-host"))
+	if err := myFlags.BindPFlag("docker-host", c.Flags().Lookup("docker-host")); err != nil {
+		panic(err)
+	}
 	myFlags.SetDefault("docker-host", dockerSocket)
 
 	c.Flags().BoolVarP(&debug, "debug", "d", false, "Debug mode")
-	myFlags.BindPFlag("debug", c.Flags().Lookup("debug"))
+	if err := myFlags.BindPFlag("debug", c.Flags().Lookup("debug")); err != nil {
+		panic(err)
+	}
 	myFlags.SetDefault("debug", true)
 
 	c.Flags().BoolVarP(&jsonLogs, "json", "j", false, "Log in json format")
-	myFlags.BindPFlag("json", c.Flags().Lookup("json"))
+	if err := myFlags.BindPFlag("json", c.Flags().Lookup("json")); err != nil {
+		panic(err)
+	}
 	myFlags.SetDefault("json", true)
 
 	c.Flags().BoolVarP(&nonInteractive, "non-interactive", "N", false, "Do not create a tty for Docker")
-	myFlags.BindPFlag("non-interactive", c.Flags().Lookup("non-interactive"))
+	if err := myFlags.BindPFlag("non-interactive", c.Flags().Lookup("non-interactive")); err != nil {
+		panic(err)
+	}
 	myFlags.SetDefault("non-interactive", false)
 
 	gitCfg = new(GitCheckoutConfig)
 	c.Flags().StringVarP(&gitCfg.Repo, "git", "g", "", "Git repo to checkout and build. Default behaviour is to build $PWD.")
-	myFlags.BindPFlag("git", c.Flags().Lookup("git"))
+	if err := myFlags.BindPFlag("git", c.Flags().Lookup("git")); err != nil {
+		panic(err)
+	}
 
 	c.Flags().StringVarP(&gitCfg.Branch, "git-branch", "b", "master", "Branch to checkout. Only makes sense when combined with the --git flag.")
-	myFlags.BindPFlag("branch", c.Flags().Lookup("branch"))
+	if err := myFlags.BindPFlag("branch", c.Flags().Lookup("branch")); err != nil {
+		panic(err)
+	}
 	myFlags.SetDefault("branch", "master")
 
 	c.Flags().StringVarP(&gitCfg.RelPath, "git-path", "P", "", "Path within a git repo where we want to operate.")
-	myFlags.BindPFlag("git-path", c.Flags().Lookup("git-path"))
+	if err := myFlags.BindPFlag("git-path", c.Flags().Lookup("git-path")); err != nil {
+		panic(err)
+	}
 }
 
 // initConfig does the initial setup of viper
