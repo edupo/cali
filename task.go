@@ -59,22 +59,20 @@ func (t *Task) SetDefaults(args []string) error {
 //
 // The ~ symbol and relative paths will be correctly expanded depending on the host OS
 func (t *Task) Bind(src, dst string) (string, error) {
-	var expanded string
+	expanded := src
 
 	if strings.HasPrefix(src, "~") {
 		usr, err := user.Current()
-
 		if err != nil {
-			return expanded, fmt.Errorf("Error expanding bind path: %s", src)
+			return expanded, err
 		}
 		expanded = filepath.Join(usr.HomeDir, src[2:])
-	} else {
-		expanded = src
 	}
-	expanded, err := filepath.Abs(expanded)
 
+	expanded, err := filepath.Abs(expanded)
 	if err != nil {
-		return expanded, fmt.Errorf("Error expanding bind path: %s", src)
+		return expanded, err
 	}
+
 	return fmt.Sprintf("%s:%s", expanded, dst), nil
 }

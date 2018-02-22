@@ -31,13 +31,13 @@ type TaskFunc func(t *Task, args []string)
 // attached to the Task
 var defaultTaskFunc TaskFunc = func(t *Task, args []string) {
 	if err := t.SetDefaults(args); err != nil {
-		log.Fatalf("Error setting container defaults: %s", err)
+		log.WithError(err).Fatal("Setting container defaults")
 	}
 	if err := t.InitDocker(); err != nil {
-		log.Fatalf("Error initialising Docker: %s", err)
+		log.WithError(err).Fatal("Initialising Docker")
 	}
 	if _, err := t.StartContainer(false, ""); err != nil {
-		log.Fatalf("Error executing task: %s", err)
+		log.WithError(err).Fatal("Error executing task")
 	}
 }
 

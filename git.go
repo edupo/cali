@@ -34,7 +34,7 @@ func (g *Git) Checkout(cfg *GitCheckoutConfig) (string, error) {
 	name := fmt.Sprintf("data_%x", md5.Sum([]byte(cfg.Repo+cfg.Branch)))
 
 	if g.c.ContainerExists(name) {
-		log.Infof("Existing data container found: %s", name)
+		log.WithField("name", name).Info("Existing data container found")
 
 		if _, err := g.Pull(name); err != nil {
 			log.Warnf("Git pull error: %s", err)
@@ -72,7 +72,7 @@ func (g *Git) Checkout(cfg *GitCheckoutConfig) (string, error) {
 	id, err := g.c.StartContainer(false, name)
 
 	if err != nil {
-		return "", fmt.Errorf("Failed to create data container for %s: %s", cfg.Repo, err)
+		return "", err
 	}
 	return id, nil
 }
