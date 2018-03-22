@@ -128,6 +128,7 @@ func (c *Cli) initConfig() {
 	} else {
 		myFlags.SetConfigName(fmt.Sprintf(".%s", c.name))
 		myFlags.AddConfigPath("$HOME")
+		myFlags.AddConfigPath(".")
 	}
 	myFlags.AutomaticEnv()
 
