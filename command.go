@@ -44,8 +44,8 @@ func (c *Command) setRun(f cobraFunc) {
 	c.cobra.Run = f
 }
 
-// Task is something executed by a command
-func (c *Command) Task(def interface{}) *Task {
+// AddTask is something executed by a command
+func (c *Command) AddTask(def interface{}) *Task {
 	t := &Task{DockerClient: NewDockerClient()}
 
 	switch d := def.(type) {
