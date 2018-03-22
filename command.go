@@ -46,7 +46,7 @@ func (c *Command) setRun(f cobraFunc) {
 
 // AddTask is something executed by a command
 func (c *Command) AddTask(def interface{}) *Task {
-	t := &Task{DockerClient: NewDockerClient()}
+	t := NewTask()
 
 	switch d := def.(type) {
 	case string:

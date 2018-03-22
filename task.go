@@ -32,6 +32,10 @@ var defaultTaskFunc TaskFunc = func(t *Task, args []string) {
 	}
 }
 
+func NewTask() *Task {
+	return &Task{DockerClient: NewDockerClient()}
+}
+
 // SetFunc sets the TaskFunc which is run when the parent command is run
 // if this is left unset, the defaultTaskFunc will be executed instead
 func (t *Task) SetFunc(f TaskFunc) {
