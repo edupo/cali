@@ -14,12 +14,13 @@ const (
 	exitCodeRuntimeError = 1
 	exitCodeAPIError     = 2
 
-	workDir = "/tmp/workspace"
+	defaultDockerRegistry = "docker.io"
+	workDir               = "/tmp/workspace"
 )
 
 var (
 	debug, jsonLogs, nonInteractive bool
-	dockerHost                      string
+	dockerHost, dockerRegistry      string
 	myFlags                         *viper.Viper
 	gitCfg                          *GitCheckoutConfig
 )
@@ -96,6 +97,10 @@ func (c *Cli) initFlags() {
 	c.Flags().StringVarP(&dockerHost, "docker-host", "H", dockerSocket, "URI of Docker Daemon")
 	myFlags.BindPFlag("docker-host", c.Flags().Lookup("docker-host"))
 	myFlags.SetDefault("docker-host", dockerSocket)
+
+	c.Flags().StringVarP(&dockerRegistry, "docker-registry", "R", defaultDockerRegistry, "URI of Docker registry")
+	myFlags.BindPFlag("docker-registry", c.Flags().Lookup("docker-registry"))
+	myFlags.SetDefault("docker-registry", defaultDockerRegistry)
 
 	c.Flags().BoolVarP(&debug, "debug", "d", false, "Debug mode")
 	myFlags.BindPFlag("debug", c.Flags().Lookup("debug"))
