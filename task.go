@@ -52,7 +52,7 @@ func (t *Task) SetInitFunc(f TaskFunc) {
 // Configures git
 func (t *Task) SetDefaults(args []string) error {
 	t.SetWorkDir(workDir)
-	t.SetRegistry(myFlags.GetString("docker-registry"))
+	t.SetRegistry(flags.GetString("docker-registry"))
 	awsDir, err := t.Bind("~/.aws", "/root/.aws")
 	if err != nil {
 		return err

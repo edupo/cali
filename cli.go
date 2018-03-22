@@ -22,7 +22,7 @@ const (
 var (
 	debug, jsonLogs, nonInteractive bool
 	dockerHost, dockerRegistry      string
-	myFlags                         *viper.Viper
+	flags                           *viper.Viper
 	gitCfg                          *GitCheckoutConfig
 )
 
@@ -56,7 +56,7 @@ func NewCli(n string) *Cli {
 			log.SetFormatter(&log.JSONFormatter{})
 		}
 	}
-	myFlags = viper.New()
+	flags = viper.New()
 	return &c
 }
 
@@ -79,7 +79,7 @@ func (c *Cli) AddCommand(n string) *Command {
 // FlagValues returns the wrapped viper object allowing the API consumer to use methods
 // like GetString to get values from config
 func (c *Cli) FlagValues() *viper.Viper {
-	return myFlags
+	return flags
 }
 
 // initFlags does the intial setup of the root command's persistent flags
@@ -96,52 +96,52 @@ func (c *Cli) initFlags() {
 		dockerSocket = "unix:///var/run/docker.sock"
 	}
 	c.Flags().StringVarP(&dockerHost, "docker-host", "H", dockerSocket, "URI of Docker Daemon")
-	myFlags.BindPFlag("docker-host", c.Flags().Lookup("docker-host"))
-	myFlags.SetDefault("docker-host", dockerSocket)
+	flags.BindPFlag("docker-host", c.Flags().Lookup("docker-host"))
+	flags.SetDefault("docker-host", dockerSocket)
 
 	c.Flags().StringVarP(&dockerRegistry, "docker-registry", "R", defaultDockerRegistry, "URI of Docker registry")
-	myFlags.BindPFlag("docker-registry", c.Flags().Lookup("docker-registry"))
-	myFlags.SetDefault("docker-registry", defaultDockerRegistry)
+	flags.BindPFlag("docker-registry", c.Flags().Lookup("docker-registry"))
+	flags.SetDefault("docker-registry", defaultDockerRegistry)
 
 	c.Flags().BoolVarP(&debug, "debug", "d", false, "Debug mode")
-	myFlags.BindPFlag("debug", c.Flags().Lookup("debug"))
-	myFlags.SetDefault("debug", true)
+	flags.BindPFlag("debug", c.Flags().Lookup("debug"))
+	flags.SetDefault("debug", true)
 
 	c.Flags().BoolVarP(&jsonLogs, "json", "j", false, "Log in json format")
-	myFlags.BindPFlag("json", c.Flags().Lookup("json"))
-	myFlags.SetDefault("json", true)
+	flags.BindPFlag("json", c.Flags().Lookup("json"))
+	flags.SetDefault("json", true)
 
 	c.Flags().BoolVarP(&nonInteractive, "non-interactive", "N", false, "Do not create a tty for Docker")
-	myFlags.BindPFlag("non-interactive", c.Flags().Lookup("non-interactive"))
-	myFlags.SetDefault("non-interactive", false)
+	flags.BindPFlag("non-interactive", c.Flags().Lookup("non-interactive"))
+	flags.SetDefault("non-interactive", false)
 
 	gitCfg = new(GitCheckoutConfig)
 	c.Flags().StringVarP(&gitCfg.Repo, "git", "g", "", "Git repo to checkout and build. Default behaviour is to build $PWD.")
-	myFlags.BindPFlag("git", c.Flags().Lookup("git"))
+	flags.BindPFlag("git", c.Flags().Lookup("git"))
 
 	c.Flags().StringVarP(&gitCfg.Branch, "git-branch", "b", "master", "Branch to checkout. Only makes sense when combined with the --git flag.")
-	myFlags.BindPFlag("branch", c.Flags().Lookup("branch"))
-	myFlags.SetDefault("branch", "master")
+	flags.BindPFlag("branch", c.Flags().Lookup("branch"))
+	flags.SetDefault("branch", "master")
 
 	c.Flags().StringVarP(&gitCfg.RelPath, "git-path", "P", "", "Path within a git repo where we want to operate.")
-	myFlags.BindPFlag("git-path", c.Flags().Lookup("git-path"))
+	flags.BindPFlag("git-path", c.Flags().Lookup("git-path"))
 }
 
 // initConfig does the initial setup of viper
 func (c *Cli) initConfig() {
 	if *c.cfgFile != "" {
-		myFlags.SetConfigFile(*c.cfgFile)
+		flags.SetConfigFile(*c.cfgFile)
 	} else {
-		myFlags.SetConfigName(fmt.Sprintf(".%s", c.name))
-		myFlags.AddConfigPath("$HOME")
-		myFlags.AddConfigPath(".")
+		flags.SetConfigName(fmt.Sprintf(".%s", c.name))
+		flags.AddConfigPath("$HOME")
+		flags.AddConfigPath(".")
 	}
-	myFlags.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
-	myFlags.AutomaticEnv()
+	flags.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
+	flags.AutomaticEnv()
 
 	// If a config file is found, read it in
-	if err := myFlags.ReadInConfig(); err == nil {
-		fmt.Println("Using config file:", myFlags.ConfigFileUsed())
+	if err := flags.ReadInConfig(); err == nil {
+		fmt.Println("Using config file:", flags.ConfigFileUsed())
 	}
 }
 
