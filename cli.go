@@ -8,6 +8,7 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	"strings"
 )
 
 const (
@@ -135,6 +136,7 @@ func (c *Cli) initConfig() {
 		myFlags.AddConfigPath("$HOME")
 		myFlags.AddConfigPath(".")
 	}
+	myFlags.SetEnvKeyReplacer(strings.NewReplacer("-", "_"))
 	myFlags.AutomaticEnv()
 
 	// If a config file is found, read it in
