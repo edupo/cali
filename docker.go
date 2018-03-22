@@ -19,7 +19,11 @@ import (
 	"golang.org/x/crypto/ssh/terminal"
 	"golang.org/x/net/context"
 	"gopkg.in/cheggaaa/pb.v1"
+//	"github.com/jhoonb/archivex"
+	"github.com/geertjohan/go.rice"
 )
+
+// TODO: docker inside lib/docker as a utils library
 
 // Event holds the json structure for Docker API events
 type Event struct {
@@ -205,8 +209,29 @@ func (c *DockerClient) BindFromGit(cfg *GitCheckoutConfig, noGit func() error) e
 	return nil
 }
 
+func (c *DockerClient) FixImage(image string) (string, error) {
+
+	c.Start
+	// Generating the docker build context
+	//tar := new(archivex.TarFile)
+	//tar.Add()
+	box, err := rice.FindBox("static")
+	if err != nil {
+		return "", err
+	}
+	file, err := box.String("entrypoint.sh")
+	if err != nil {
+		return "", err
+	}
+	fmt.Println(file)
+	return "", nil
+
+	c.Cli.ContainerExecCreate()
+}
+
 // StartContainer will create and start a container with logs and optional cleanup
 func (c *DockerClient) StartContainer(rm bool, name string) (string, error) {
+	c.FixImage(name)
 	log.WithFields(log.Fields{
 		"image": c.Conf.Image,
 		"envs":  fmt.Sprintf("%v", c.Conf.Env),
@@ -379,6 +404,7 @@ func (c *DockerClient) ImageExists(image string) bool {
 // PullImage - Pull an image locally
 func (c *DockerClient) PullImage(image string) error {
 
+	// TODO: Pull image first check if there are changes.
 	if !c.ImageExists(image) {
 		log.WithFields(log.Fields{
 			"image": image,
