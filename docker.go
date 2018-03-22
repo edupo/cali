@@ -55,7 +55,10 @@ func (c *DockerClient) InitDocker() error {
 	var cli *client.Client
 
 	defaultHeaders := map[string]string{"User-Agent": "engine-api-cli-1.0"}
-	cli, err := client.NewClient(dockerHost, "v1.22", nil, defaultHeaders)
+	cli, err := client.NewClientWithOpts(
+		client.WithHost(dockerHost),
+		client.WithVersion("v1.22"),
+		client.WithHTTPHeaders(defaultHeaders))
 
 	if err != nil {
 		return fmt.Errorf("Could not connect to Docker daemon on %s: %s", dockerHost, err)
