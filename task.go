@@ -6,12 +6,30 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"log"
 )
 
 // Task is the action performed when it's parent command is run
 type Task struct {
 	f, init TaskFunc
 	*DockerClient
+}
+
+// TaskFunc is a function executed by a Task when the command the Task belongs to is run
+type TaskFunc func(t *Task, args []string)
+
+// defaultTaskFunc is the TaskFunc which is executed unless a custom TaskFunc is
+// attached to the Task
+var defaultTaskFunc TaskFunc = func(t *Task, args []string) {
+	if err := t.SetDefaults(args); err != nil {
+		log.Fatalf("Error setting container defaults: %s", err)
+	}
+	if err := t.InitDocker(); err != nil {
+		log.Fatalf("Error initialising Docker: %s", err)
+	}
+	if _, err := t.StartContainer(false, ""); err != nil {
+		log.Fatalf("Error executing task: %s", err)
+	}
 }
 
 // SetFunc sets the TaskFunc which is run when the parent command is run

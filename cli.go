@@ -24,23 +24,6 @@ var (
 	gitCfg                          *GitCheckoutConfig
 )
 
-// TaskFunc is a function executed by a Task when the command the Task belongs to is run
-type TaskFunc func(t *Task, args []string)
-
-// defaultTaskFunc is the TaskFunc which is executed unless a custom TaskFunc is
-// attached to the Task
-var defaultTaskFunc TaskFunc = func(t *Task, args []string) {
-	if err := t.SetDefaults(args); err != nil {
-		log.Fatalf("Error setting container defaults: %s", err)
-	}
-	if err := t.InitDocker(); err != nil {
-		log.Fatalf("Error initialising Docker: %s", err)
-	}
-	if _, err := t.StartContainer(false, ""); err != nil {
-		log.Fatalf("Error executing task: %s", err)
-	}
-}
-
 // cobraFunc represents the function signiture which cobra uses for it's Run, PreRun, PostRun etc.
 type cobraFunc func(cmd *cobra.Command, args []string)
 
