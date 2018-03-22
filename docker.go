@@ -18,7 +18,7 @@ import (
 	"github.com/docker/docker/client"
 	"golang.org/x/crypto/ssh/terminal"
 	"golang.org/x/net/context"
-	pb "gopkg.in/cheggaaa/pb.v1"
+	"gopkg.in/cheggaaa/pb.v1"
 )
 
 // Event holds the json structure for Docker API events
@@ -43,10 +43,11 @@ type CreateResponse struct {
 
 // DockerClient is a slimmed down implementation of the docker cli
 type DockerClient struct {
-	Cli      *client.Client
-	HostConf *container.HostConfig
-	NetConf  *network.NetworkingConfig
-	Conf     *container.Config
+	Cli             *client.Client
+	HostConf        *container.HostConfig
+	NetConf         *network.NetworkingConfig
+	Conf            *container.Config
+	Registry, Image string
 }
 
 // InitDocker initialises the client
@@ -132,7 +133,24 @@ func (c *DockerClient) SetEnvs(envs []string) {
 
 // SetImage sets the image in Conf
 func (c *DockerClient) SetImage(img string) {
+	c.Image = img
+	c.setImage()
+}
+
+func (c *DockerClient) setImage() {
+	var img string
+	if c.Registry != "" {
+		img = c.Registry + "/" + c.Image
+	}else {
+		img = c.Image
+	}
 	c.Conf.Image = img
+}
+
+// SetRegistry sets the registry where to pull images from
+func (c *DockerClient) SetRegistry(reg string) {
+	c.Registry = reg
+	c.setImage()
 }
 
 // Privileged sets whether the container should run as privileged
@@ -149,6 +167,7 @@ func (c *DockerClient) SetCmd(cmd []string) {
 func (c *DockerClient) SetWorkDir(wd string) {
 	c.Conf.WorkingDir = wd
 }
+
 
 // BindFromGit creates a data container with a git clone inside and mounts its volumes inside your app container
 // If there is no valid Git repo set in config, the noGit callback function will be executed instead
