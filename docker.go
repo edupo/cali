@@ -19,8 +19,10 @@ import (
 	"golang.org/x/crypto/ssh/terminal"
 	"golang.org/x/net/context"
 	"gopkg.in/cheggaaa/pb.v1"
-	//	"github.com/jhoonb/archivex"
-	//	"github.com/geertjohan/go.rice"
+
+	"io/ioutil"
+
+	"github.com/jhoonb/archivex"
 )
 
 // TODO: docker inside lib/docker as a utils library
@@ -52,6 +54,7 @@ type DockerClient struct {
 	NetConf         *network.NetworkingConfig
 	Conf            *container.Config
 	Registry, Image string
+	Entrypoint      []string
 }
 
 // InitDocker initialises the client
@@ -144,6 +147,11 @@ func (c *DockerClient) SetImage(img string) {
 	c.setImage()
 }
 
+// SetCmd sets the command the Entrypoint
+func (c *DockerClient) SetEntrypoint(ep []string) {
+	c.Entrypoint = ep
+}
+
 func (c *DockerClient) setImage() {
 	var img string
 	if c.Registry != "" {
@@ -208,26 +216,172 @@ func (c *DockerClient) BindFromGit(cfg *GitCheckoutConfig, noGit func() error) e
 	return nil
 }
 
-func (c *DockerClient) FixImage(image string) (string, error) {
-	return "", nil
+// The magic fix that allows user to run inside the target container as itself.
+func (c *DockerClient) fixContainer(containerID string) error {
+
+	log.WithField("image", c.Conf.Image).Debug("Fixing image")
+
+	// To deploy the fix script we need to tar it first
+	tar := new(archivex.TarFile)
+	tar.Create("/tmp/clide_fix.tar")
+	dat, err := ioutil.ReadFile("../static/fix.sh")
+	check(err)
+	tar.Add("fix.sh", dat)
+	tar.Close()
+	holyTar, err := os.Open("/tmp/clide_fix.tar")
+	defer holyTar.Close()
+
+	// The actual deploy happens next
+	err = c.Cli.CopyToContainer(context.Background(),
+		containerID,
+		"/tmp",
+		holyTar,
+		types.CopyToContainerOptions{})
+	if err != nil {
+		return err
+	}
+
+	// Executing the fix script.
+	err = c.execContainer(
+		containerID,
+		[]string{"/bin/sh", "/tmp/fix.sh"},
+		"root",
+		true)
+	if err != nil {
+		return err
+	}
+
+	return err
 }
 
-// InitContainer encapsulates basic check-pull-create container functionality.
-func (c *DockerClient) InitContainer(name string) (string, error) {
+// Setup container starts the desired image,
+// applies user fix and leave the container running.
+func (c *DockerClient) InitializeContainer(name string) (string, error) {
+
+	// First set the image entry point to wait forever.
+	// We will run any additional command as an exec.
+	c.Conf.Entrypoint = []string{"sleep", "infinity"}
+
+	id, err := c.initializeContainer(name)
+	if err != nil {
+		return id, err
+	}
+
+	if err := c.fixContainer(id); err != nil {
+		return id, err
+	}
+
+	return id, nil
+
+}
+
+func (c *DockerClient) execContainer(id string, cmd []string,
+	user string, nonInteractive bool) error {
+
+	log.WithFields(log.Fields{
+		"id":   id[0:12],
+		"cmd":  fmt.Sprintf("%v", cmd),
+		"user": user,
+	}).Debug("Executing command in container as user")
+
+	// Creating execution for the entrypoint shell script.
+	resp, err := c.Cli.ContainerExecCreate(context.Background(), id,
+		types.ExecConfig{
+			Cmd:          cmd,
+			Tty:          true,
+			AttachStdout: true,
+			AttachStderr: true,
+			AttachStdin:  true,
+			User:         user,
+			Detach:       false,
+		})
+	if err != nil {
+		panic(err)
+	}
+
+	execID := resp.ID
+
+	in := int(os.Stdin.Fd())
+
+	// Attaching to the exec
+	hijack, err := c.Cli.ContainerExecAttach(context.Background(), execID,
+		types.ExecStartCheck{Tty: true})
+	if err == nil {
+		defer hijack.Conn.Close()
+	}
+	if err != nil {
+		panic(err)
+	}
+
+	if !nonInteractive && terminal.IsTerminal(int(os.Stdin.Fd())) {
+
+		log.Debug("Running interactively")
+		// While we have a container running, create a buffer for the pscli logs
+		logBuffer := bufio.NewWriter(os.Stdout)
+		log.SetOutput(logBuffer)
+		// Write buffer to stdout once detatched from container
+		defer logBuffer.Flush()
+		// Reset logs to stdout after conection is closed
+		defer log.SetOutput(os.Stdout)
+
+		// Making the terminal raw
+		oldState, err := terminal.MakeRaw(in)
+		if err != nil {
+			panic(err)
+		}
+		defer terminal.Restore(in, oldState)
+
+		// Start stdin reader
+		go func() {
+			log.Debug("Listening to stdin")
+
+			if _, err := io.Copy(hijack.Conn, os.Stdin); err != nil {
+				log.Errorf("Write error: %s", err)
+			}
+		}()
+	}
+
+	// Start stdout writer
+	if _, err := io.Copy(os.Stdout, hijack.Conn); err != nil {
+		log.Errorf("Read error: %s", err)
+	}
+
+	return err
+}
+
+func (c *DockerClient) initializeContainer(name string) (string, error) {
+
 	log.WithFields(log.Fields{
 		"image": c.Conf.Image,
 		"envs":  fmt.Sprintf("%v", c.Conf.Env),
 		"cmd":   fmt.Sprintf("%v", c.Conf.Cmd),
-	}).Debug("Creating new container")
+	}).Debug("Initializing new container")
 
-	// TODO checking remote hash before pulling
+	// Pulling the Image
 	if err := c.PullImage(c.Conf.Image); err != nil {
 		return "", fmt.Errorf("Failed to fetch image: %s", err)
 	}
 
-	resp, err := c.Cli.ContainerCreate(context.Background(), c.Conf, c.HostConf, c.NetConf, name)
+	// Creation of the container
+	resp, err := c.Cli.ContainerCreate(context.Background(), c.Conf, c.HostConf,
+		c.NetConf, name)
 	if err != nil {
 		return "", fmt.Errorf("Failed to create container: %s", err)
+	}
+
+	// Starting the container
+	if err := c.Cli.ContainerStart(context.Background(), resp.ID,
+		types.ContainerStartOptions{}); err != nil {
+		return resp.ID, err
+	}
+
+	out := int(os.Stdout.Fd())
+	// Resizing the container output
+	tw, th, _ := terminal.GetSize(out)
+	err = c.Cli.ContainerResize(context.Background(), resp.ID,
+		types.ResizeOptions{Height: uint(th), Width: uint(tw)})
+	if err != nil {
+		return resp.ID, err
 	}
 
 	return resp.ID, nil
@@ -236,10 +390,8 @@ func (c *DockerClient) InitContainer(name string) (string, error) {
 // StartContainer will create and start a container with logs and optional cleanup
 func (c *DockerClient) StartContainer(rm bool, name string) (string, error) {
 
-	id, err := c.InitContainer(name)
-	if err != nil {
-		return "", err
-	}
+	id, err := c.InitializeContainer(name)
+	check(err)
 
 	// Clean up on ctrl+c
 	ch := make(chan os.Signal, 1)
@@ -255,105 +407,27 @@ func (c *DockerClient) StartContainer(rm bool, name string) (string, error) {
 		}
 		os.Exit(1)
 	}()
-	log.WithFields(log.Fields{
-		"image": c.Conf.Image,
-		"id":    id[0:12],
-	}).Debug("Starting new container")
 
-	// Set the TTY size to match the host terminal
-	fd := int(os.Stdin.Fd())
-
-	if !nonInteractive && terminal.IsTerminal(fd) {
-		// While we have a container running, create a buffer for the pscli logs
-		logBuffer := bufio.NewWriter(os.Stdout)
-		log.SetOutput(logBuffer)
-		// Write buffer to stdout once detatched from container
-		defer logBuffer.Flush()
-		// Reset logs to stdout after conection is closed
-		defer log.SetOutput(os.Stdout)
-
-		// If we have an interactive terminal then use it!
-		ca := types.ContainerAttachOptions{
-			Stream: true,
-			Stdin:  true,
-			Stdout: true,
-			Stderr: true,
-		}
-		hijack, err := c.Cli.ContainerAttach(context.Background(), id, ca)
-		if err == nil {
-			defer hijack.Conn.Close()
-		}
-
-		if err != nil {
-			return id, fmt.Errorf("Failed to start container: %s", err)
-		}
-		oldState, err := terminal.MakeRaw(fd)
-		defer terminal.Restore(fd, oldState)
-
-		if err != nil {
-			panic(err)
-		}
-
-		if err := c.Cli.ContainerStart(context.Background(), id, types.ContainerStartOptions{}); err != nil {
-			return id, fmt.Errorf("Failed to start container: %s", err)
-		}
-
-		// Start stdin reader
-		go func() {
-			defer terminal.Restore(fd, oldState)
-			defer hijack.Conn.Close()
-
-			if _, err := io.Copy(hijack.Conn, os.Stdin); err != nil {
-				log.Errorf("Write error: %s", err)
-			}
-		}()
-
-		tw, th, _ := terminal.GetSize(fd)
-
-		if err := c.Cli.ContainerResize(context.Background(), id, types.ResizeOptions{Height: uint(th), Width: uint(tw)}); err != nil {
-			return id, fmt.Errorf("Failed to start container: %s", err)
-		}
-
-		// Start stdout writer
-		if _, err := io.Copy(os.Stdout, hijack.Conn); err != nil {
-			log.Errorf("Read error: %s", err)
-		}
-	} else {
-		// No terminal, then just pump out the log output
-		if err := c.Cli.ContainerStart(context.Background(), id, types.ContainerStartOptions{}); err != nil {
-			return id, fmt.Errorf("Failed to start container: %s", err)
-		}
-		log.WithFields(log.Fields{
-			"image": c.Conf.Image,
-			"id":    id[0:12],
-		}).Debug("Fetching log stream")
-		logOptions := types.ContainerLogsOptions{Follow: true, ShowStdout: true, ShowStderr: true}
-		ls, err := c.Cli.ContainerLogs(context.Background(), id, logOptions)
-
-		if err != nil {
-			return id, fmt.Errorf("Failed to get container logs: %s", err)
-		}
-
-		_, err = io.Copy(os.Stdout, ls)
-		if err != nil {
-			return id, fmt.Errorf("Failed to get container logs: %s", err)
-		}
+	err = c.execContainer(id, c.Entrypoint, "user", false)
+	if err != nil {
+		return id, err
 	}
+
 	// Container has finished running. Get its exit code
 	inspect, err := c.Cli.ContainerInspect(context.Background(), id)
 	if err != nil {
-		return id, fmt.Errorf("Failed to inspect Docker container: %s", err)
+		return id, err
 	}
 
 	if rm {
 
 		if err = c.DeleteContainer(id); err != nil {
-			return id, fmt.Errorf("Failed to remove container: %s", err)
+			return id, err
 		}
 	}
 
 	if inspect.State.ExitCode != 0 {
-		return id, fmt.Errorf("Non-zero exit status from Docker container")
+		return id, err
 	}
 	return id, nil
 }
@@ -372,7 +446,7 @@ func (c *DockerClient) DeleteContainer(id string) error {
 	}).Debug("Removing container")
 
 	if err := c.Cli.ContainerRemove(context.Background(), id, types.ContainerRemoveOptions{Force: true}); err != nil {
-		return fmt.Errorf("Failed to remove container: %s", err)
+		return err
 	}
 	return nil
 }
@@ -449,4 +523,10 @@ func (c *DockerClient) PullImage(image string) error {
 		fmt.Print("\n")
 	}
 	return nil
+}
+
+func check(err error) {
+	if err != nil {
+		panic(err)
+	}
 }
