@@ -19,8 +19,8 @@ import (
 	"golang.org/x/crypto/ssh/terminal"
 	"golang.org/x/net/context"
 	"gopkg.in/cheggaaa/pb.v1"
-//	"github.com/jhoonb/archivex"
-	"github.com/geertjohan/go.rice"
+	//	"github.com/jhoonb/archivex"
+	//	"github.com/geertjohan/go.rice"
 )
 
 // TODO: docker inside lib/docker as a utils library
@@ -148,7 +148,7 @@ func (c *DockerClient) setImage() {
 	var img string
 	if c.Registry != "" {
 		img = c.Registry + "/" + c.Image
-	}else {
+	} else {
 		img = c.Image
 	}
 	c.Conf.Image = img
@@ -174,7 +174,6 @@ func (c *DockerClient) SetCmd(cmd []string) {
 func (c *DockerClient) SetWorkDir(wd string) {
 	c.Conf.WorkingDir = wd
 }
-
 
 // BindFromGit creates a data container with a git clone inside and mounts its volumes inside your app container
 // If there is no valid Git repo set in config, the noGit callback function will be executed instead
@@ -210,34 +209,18 @@ func (c *DockerClient) BindFromGit(cfg *GitCheckoutConfig, noGit func() error) e
 }
 
 func (c *DockerClient) FixImage(image string) (string, error) {
-
-	c.Start
-	// Generating the docker build context
-	//tar := new(archivex.TarFile)
-	//tar.Add()
-	box, err := rice.FindBox("static")
-	if err != nil {
-		return "", err
-	}
-	file, err := box.String("entrypoint.sh")
-	if err != nil {
-		return "", err
-	}
-	fmt.Println(file)
 	return "", nil
-
-	c.Cli.ContainerExecCreate()
 }
 
-// StartContainer will create and start a container with logs and optional cleanup
-func (c *DockerClient) StartContainer(rm bool, name string) (string, error) {
-	c.FixImage(name)
+// InitContainer encapsulates basic check-pull-create container functionality.
+func (c *DockerClient) InitContainer(name string) (string, error) {
 	log.WithFields(log.Fields{
 		"image": c.Conf.Image,
 		"envs":  fmt.Sprintf("%v", c.Conf.Env),
 		"cmd":   fmt.Sprintf("%v", c.Conf.Cmd),
 	}).Debug("Creating new container")
 
+	// TODO checking remote hash before pulling
 	if err := c.PullImage(c.Conf.Image); err != nil {
 		return "", fmt.Errorf("Failed to fetch image: %s", err)
 	}
@@ -245,6 +228,17 @@ func (c *DockerClient) StartContainer(rm bool, name string) (string, error) {
 	resp, err := c.Cli.ContainerCreate(context.Background(), c.Conf, c.HostConf, c.NetConf, name)
 	if err != nil {
 		return "", fmt.Errorf("Failed to create container: %s", err)
+	}
+
+	return resp.ID, nil
+}
+
+// StartContainer will create and start a container with logs and optional cleanup
+func (c *DockerClient) StartContainer(rm bool, name string) (string, error) {
+
+	id, err := c.InitContainer(name)
+	if err != nil {
+		return "", err
 	}
 
 	// Clean up on ctrl+c
@@ -256,14 +250,14 @@ func (c *DockerClient) StartContainer(rm bool, name string) (string, error) {
 		<-ch
 		log.Debug("Trapped ctrl+c")
 
-		if err = c.DeleteContainer(resp.ID); err != nil {
+		if err = c.DeleteContainer(id); err != nil {
 			log.Errorf("Failed to remove container: %s", err)
 		}
 		os.Exit(1)
 	}()
 	log.WithFields(log.Fields{
 		"image": c.Conf.Image,
-		"id":    resp.ID[0:12],
+		"id":    id[0:12],
 	}).Debug("Starting new container")
 
 	// Set the TTY size to match the host terminal
@@ -285,13 +279,13 @@ func (c *DockerClient) StartContainer(rm bool, name string) (string, error) {
 			Stdout: true,
 			Stderr: true,
 		}
-		hijack, err := c.Cli.ContainerAttach(context.Background(), resp.ID, ca)
+		hijack, err := c.Cli.ContainerAttach(context.Background(), id, ca)
 		if err == nil {
 			defer hijack.Conn.Close()
 		}
 
 		if err != nil {
-			return resp.ID, fmt.Errorf("Failed to start container: %s", err)
+			return id, fmt.Errorf("Failed to start container: %s", err)
 		}
 		oldState, err := terminal.MakeRaw(fd)
 		defer terminal.Restore(fd, oldState)
@@ -300,8 +294,8 @@ func (c *DockerClient) StartContainer(rm bool, name string) (string, error) {
 			panic(err)
 		}
 
-		if err := c.Cli.ContainerStart(context.Background(), resp.ID, types.ContainerStartOptions{}); err != nil {
-			return resp.ID, fmt.Errorf("Failed to start container: %s", err)
+		if err := c.Cli.ContainerStart(context.Background(), id, types.ContainerStartOptions{}); err != nil {
+			return id, fmt.Errorf("Failed to start container: %s", err)
 		}
 
 		// Start stdin reader
@@ -316,8 +310,8 @@ func (c *DockerClient) StartContainer(rm bool, name string) (string, error) {
 
 		tw, th, _ := terminal.GetSize(fd)
 
-		if err := c.Cli.ContainerResize(context.Background(), resp.ID, types.ResizeOptions{Height: uint(th), Width: uint(tw)}); err != nil {
-			return resp.ID, fmt.Errorf("Failed to start container: %s", err)
+		if err := c.Cli.ContainerResize(context.Background(), id, types.ResizeOptions{Height: uint(th), Width: uint(tw)}); err != nil {
+			return id, fmt.Errorf("Failed to start container: %s", err)
 		}
 
 		// Start stdout writer
@@ -326,42 +320,42 @@ func (c *DockerClient) StartContainer(rm bool, name string) (string, error) {
 		}
 	} else {
 		// No terminal, then just pump out the log output
-		if err := c.Cli.ContainerStart(context.Background(), resp.ID, types.ContainerStartOptions{}); err != nil {
-			return resp.ID, fmt.Errorf("Failed to start container: %s", err)
+		if err := c.Cli.ContainerStart(context.Background(), id, types.ContainerStartOptions{}); err != nil {
+			return id, fmt.Errorf("Failed to start container: %s", err)
 		}
 		log.WithFields(log.Fields{
 			"image": c.Conf.Image,
-			"id":    resp.ID[0:12],
+			"id":    id[0:12],
 		}).Debug("Fetching log stream")
 		logOptions := types.ContainerLogsOptions{Follow: true, ShowStdout: true, ShowStderr: true}
-		ls, err := c.Cli.ContainerLogs(context.Background(), resp.ID, logOptions)
+		ls, err := c.Cli.ContainerLogs(context.Background(), id, logOptions)
 
 		if err != nil {
-			return resp.ID, fmt.Errorf("Failed to get container logs: %s", err)
+			return id, fmt.Errorf("Failed to get container logs: %s", err)
 		}
 
 		_, err = io.Copy(os.Stdout, ls)
 		if err != nil {
-			return resp.ID, fmt.Errorf("Failed to get container logs: %s", err)
+			return id, fmt.Errorf("Failed to get container logs: %s", err)
 		}
 	}
 	// Container has finished running. Get its exit code
-	inspect, err := c.Cli.ContainerInspect(context.Background(), resp.ID)
+	inspect, err := c.Cli.ContainerInspect(context.Background(), id)
 	if err != nil {
-		return resp.ID, fmt.Errorf("Failed to inspect Docker container: %s", err)
+		return id, fmt.Errorf("Failed to inspect Docker container: %s", err)
 	}
 
 	if rm {
 
-		if err = c.DeleteContainer(resp.ID); err != nil {
-			return resp.ID, fmt.Errorf("Failed to remove container: %s", err)
+		if err = c.DeleteContainer(id); err != nil {
+			return id, fmt.Errorf("Failed to remove container: %s", err)
 		}
 	}
 
 	if inspect.State.ExitCode != 0 {
-		return resp.ID, fmt.Errorf("Non-zero exit status from Docker container")
+		return id, fmt.Errorf("Non-zero exit status from Docker container")
 	}
-	return resp.ID, nil
+	return id, nil
 }
 
 // ContainerExists determines if the container with this name exist
