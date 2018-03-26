@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/edupo/cali/docker"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -24,7 +25,8 @@ var (
 	debug, jsonLogs, nonInteractive bool
 	dockerHost, dockerRegistry      string
 	flags                           *viper.Viper
-	gitCfg                          *GitCheckoutConfig
+	gitCfg                          *docker.GitCheckoutConfig
+	cwd                             string
 )
 
 // cobraFunc represents the function signiture which cobra uses for it's Run, PreRun, PostRun etc.
@@ -90,6 +92,11 @@ func (c *Cli) initFlags() {
 	c.cobra.PersistentFlags().StringVar(&cfg, "config", "", txt)
 	c.cfgFile = &cfg
 
+	wd, _ := os.Getwd()
+	c.Flags().StringVarP(&cwd, "work-dir", "C", wd,
+		"URI of Docker Daemon")
+	flags.BindPFlag("work-dir", c.Flags().Lookup("work-dir"))
+
 	var dockerSocket string
 	if runtime.GOOS == "windows" {
 		dockerSocket = "npipe:////./pipe/docker_engine"
@@ -116,7 +123,7 @@ func (c *Cli) initFlags() {
 	flags.BindPFlag("non-interactive", c.Flags().Lookup("non-interactive"))
 	flags.SetDefault("non-interactive", false)
 
-	gitCfg = new(GitCheckoutConfig)
+	gitCfg = new(docker.GitCheckoutConfig)
 	c.Flags().StringVarP(&gitCfg.Repo, "git", "g", "", "Git repo to checkout and build. Default behaviour is to build $PWD.")
 	flags.BindPFlag("git", c.Flags().Lookup("git"))
 
