@@ -5,10 +5,11 @@ import (
 	"os"
 	"runtime"
 
+	"strings"
+
 	log "github.com/Sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"strings"
 )
 
 const (
@@ -141,7 +142,8 @@ func (c *Cli) initConfig() {
 
 	// If a config file is found, read it in
 	if err := flags.ReadInConfig(); err == nil {
-		fmt.Println("Using config file:", flags.ConfigFileUsed())
+		log.WithField("file", flags.ConfigFileUsed()).Info(
+			"Using configuration file")
 	}
 }
 
