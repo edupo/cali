@@ -302,6 +302,7 @@ func (c *DockerClient) execContainer(id string, cmd []string,
 	execID := resp.ID
 
 	in := int(os.Stdin.Fd())
+	out := int(os.Stdout.Fd())
 
 	// Attaching to the exec
 	hijack, err := c.Cli.ContainerExecAttach(context.Background(), execID,
@@ -314,6 +315,14 @@ func (c *DockerClient) execContainer(id string, cmd []string,
 	}
 
 	if !nonInteractive && terminal.IsTerminal(int(os.Stdin.Fd())) {
+
+		// Resizing the container output
+		tw, th, _ := terminal.GetSize(out)
+		err = c.Cli.ContainerExecResize(context.Background(), execID,
+			types.ResizeOptions{Height: uint(th), Width: uint(tw)})
+		if err != nil {
+			return err
+		}
 
 		log.Debug("Running interactively")
 		// While we have a container running, create a buffer for the pscli logs
@@ -329,24 +338,33 @@ func (c *DockerClient) execContainer(id string, cmd []string,
 		if err != nil {
 			panic(err)
 		}
-		defer terminal.Restore(in, oldState)
 
+		// TODO: Fixing the stdin
 		// Start stdin reader
 		go func() {
 			log.Debug("Listening to stdin")
+			defer terminal.Restore(in, oldState)
 
 			if _, err := io.Copy(hijack.Conn, os.Stdin); err != nil {
 				log.Errorf("Write error: %s", err)
 			}
 		}()
 	}
-
 	// Start stdout writer
 	if _, err := io.Copy(os.Stdout, hijack.Conn); err != nil {
 		log.Errorf("Read error: %s", err)
 	}
 
 	return err
+}
+
+func (c *DockerClient) execInteractively(execID string) error {
+	return nil
+}
+
+func (c *DockerClient) execNonInteractively(execID string) error {
+
+	return nil
 }
 
 func (c *DockerClient) initializeContainer(name string) (string, error) {
@@ -372,15 +390,6 @@ func (c *DockerClient) initializeContainer(name string) (string, error) {
 	// Starting the container
 	if err := c.Cli.ContainerStart(context.Background(), resp.ID,
 		types.ContainerStartOptions{}); err != nil {
-		return resp.ID, err
-	}
-
-	out := int(os.Stdout.Fd())
-	// Resizing the container output
-	tw, th, _ := terminal.GetSize(out)
-	err = c.Cli.ContainerResize(context.Background(), resp.ID,
-		types.ResizeOptions{Height: uint(th), Width: uint(tw)})
-	if err != nil {
 		return resp.ID, err
 	}
 
