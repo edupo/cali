@@ -64,7 +64,7 @@ func (c *DockerClient) InitDocker() error {
 	defaultHeaders := map[string]string{"User-Agent": "engine-api-cli-1.0"}
 	cli, err := client.NewClientWithOpts(
 		client.WithHost(dockerHost),
-		client.WithVersion("v1.22"),
+		client.WithVersion("v1.37"),
 		client.WithHTTPHeaders(defaultHeaders))
 
 	if err != nil {
