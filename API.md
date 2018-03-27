@@ -1,280 +1,119 @@
 # cali
 --
-    import "github.com/adampointer/cali"
+    import "github.com/edupo/cali"
 
 
 ## Usage
 
-```go
-const (
-	EXIT_CODE_RUNTIME_ERROR = 1
-	EXIT_CODE_API_ERROR     = 2
-)
-```
-
-#### func  Cli
+#### type Cli
 
 ```go
-func Cli(n string) *cli
-```
-Cli returns a brand new cli
-
-#### type CreateResponse
-
-```go
-type CreateResponse struct {
-	Id             string         `json:"id"`
-	Status         string         `json:"status"`
-	ProgressDetail ProgressDetail `json:"progressDetail"`
-	Progress       string         `json:"progress,omitempty"`
+type Cli struct {
+	*Command
 }
 ```
 
-CreateResponse is the response from Docker API when pulling an image
+Cli is the application itself
 
-#### type DockerClient
+#### func  NewCli
 
 ```go
-type DockerClient struct {
-	Cli      *client.Client
-	HostConf *container.HostConfig
-	NetConf  *network.NetworkingConfig
-	Conf     *container.Config
+func NewCli(n string) *Cli
+```
+NewCli returns a brand new cli
+
+#### func (*Cli) AddCommand
+
+```go
+func (c *Cli) AddCommand(n string) *Command
+```
+AddCommand returns a brand new command attached to it's parent cli
+
+#### func (*Cli) FlagValues
+
+```go
+func (c *Cli) FlagValues() *viper.Viper
+```
+FlagValues returns the wrapped viper object allowing the API consumer to use
+methods like GetString to get values from config
+
+#### func (*Cli) Start
+
+```go
+func (c *Cli) Start()
+```
+Start the fans please!
+
+#### type Command
+
+```go
+type Command struct {
+	RunTask *Task
 }
 ```
 
-DockerClient is a slimmed down implementation of the docker cli
+Command is the actual command run by the cli and essentially just wraps
+cobra.Command and has an associated Task
 
-#### func  NewDockerClient
-
-```go
-func NewDockerClient() *DockerClient
-```
-NewDockerClient returns a new DockerClient initialised with the API object
-
-#### func (*DockerClient) AddBind
+#### func  NewCommand
 
 ```go
-func (c *DockerClient) AddBind(bnd string)
+func NewCommand(n string) *Command
 ```
-AddBind adds a bind mount to the HostConfig
+NewCommand returns an freshly initialised command
 
-#### func (*DockerClient) AddBinds
+#### func (*Command) AddTask
 
 ```go
-func (c *DockerClient) AddBinds(bnds []string)
+func (c *Command) AddTask(def interface{}) *Task
 ```
-AddBinds adds multiple bind mounts to the HostConfig
+AddTask is something executed by a command
 
-#### func (*DockerClient) AddEnv
+#### func (*Command) BindFlags
 
 ```go
-func (c *DockerClient) AddEnv(key, value string)
+func (c *Command) BindFlags()
 ```
-AddEnvs adds an environment variable to the HostConfig
+BindFlags needs to be called after all flags for a command have been defined
 
-#### func (*DockerClient) AddEnvs
+#### func (*Command) Flags
 
 ```go
-func (c *DockerClient) AddEnvs(envs []string)
+func (c *Command) Flags() *pflag.FlagSet
 ```
-AddEnvs adds multiple envs to the HostConfig
+Flags returns the FlagSet for the command and is used to set new flags for the
+command
 
-#### func (*DockerClient) BindFromGit
+#### func (*Command) SetLong
 
 ```go
-func (c *DockerClient) BindFromGit(cfg *GitCheckoutConfig, noGit func() error) error
+func (c *Command) SetLong(l string)
 ```
-BindFromGit creates a data container with a git clone inside and mounts its
-volumes inside your app container If there is no valid Git repo set in config,
-the noGit callback function will be executed instead
+SetLong sets the long description of the command
 
-#### func (*DockerClient) ContainerExists
+#### func (*Command) SetShort
 
 ```go
-func (c *DockerClient) ContainerExists(name string) bool
+func (c *Command) SetShort(s string)
 ```
-ContainerExists determines if the container with this name exist
-
-#### func (*DockerClient) DeleteContainer
-
-```go
-func (c *DockerClient) DeleteContainer(id string) error
-```
-DeleteContainer - Delete a container
-
-#### func (*DockerClient) Git
-
-```go
-func (c *DockerClient) Git() *Git
-```
-Git returns a new instance
-
-#### func (*DockerClient) ImageExists
-
-```go
-func (c *DockerClient) ImageExists(image string) bool
-```
-ImageExists determines if an image exist locally
-
-#### func (*DockerClient) InitDocker
-
-```go
-func (c *DockerClient) InitDocker() error
-```
-Init initialises the client
-
-#### func (*DockerClient) Privileged
-
-```go
-func (c *DockerClient) Privileged(p bool)
-```
-Privileged sets whether the container should run as privileged
-
-#### func (*DockerClient) PullImage
-
-```go
-func (c *DockerClient) PullImage(image string) error
-```
-PullImage - Pull an image locally
-
-#### func (*DockerClient) SetBinds
-
-```go
-func (c *DockerClient) SetBinds(bnds []string)
-```
-SetBinds sets the bind mounts in the HostConfig
-
-#### func (*DockerClient) SetCmd
-
-```go
-func (c *DockerClient) SetCmd(cmd []string)
-```
-SetCmd sets the command to run in the container
-
-#### func (*DockerClient) SetConf
-
-```go
-func (c *DockerClient) SetConf(co *container.Config)
-```
-SetConf sets the container.Config struct for the new container
-
-#### func (*DockerClient) SetDefaults
-
-```go
-func (c *DockerClient) SetDefaults()
-```
-SetDefaults sets container, host and net configs to defaults. Called when
-instantiating a new client or can be called manually at any time to reset API
-configs back to empty defaults
-
-#### func (*DockerClient) SetEnvs
-
-```go
-func (c *DockerClient) SetEnvs(envs []string)
-```
-SetEnvs sets the environment variables in the Conf
-
-#### func (*DockerClient) SetHostConf
-
-```go
-func (c *DockerClient) SetHostConf(h *container.HostConfig)
-```
-SetHostConf sets the container.HostConfig struct for the new container
-
-#### func (*DockerClient) SetImage
-
-```go
-func (c *DockerClient) SetImage(img string)
-```
-SetImage sets the image in Conf
-
-#### func (*DockerClient) SetNetConf
-
-```go
-func (c *DockerClient) SetNetConf(n *network.NetworkingConfig)
-```
-SetNetConf sets the network.NetworkingConfig struct for the new container
-
-#### func (*DockerClient) SetWorkDir
-
-```go
-func (c *DockerClient) SetWorkDir(wd string)
-```
-SetWorkDir sets the working directory of the container
-
-#### func (*DockerClient) StartContainer
-
-```go
-func (c *DockerClient) StartContainer(rm bool, name string) (string, error)
-```
-StartContainer will create and start a container with logs and optional cleanup
-
-#### type Event
-
-```go
-type Event struct {
-	Id     string `json:"id"`
-	Status string `json:"status"`
-}
-```
-
-Event holds the json structure for Docker API events
-
-#### type Git
-
-```go
-type Git struct {
-	Image string
-}
-```
-
-Git is used to interact with containerised git
-
-#### func (*Git) Checkout
-
-```go
-func (g *Git) Checkout(cfg *GitCheckoutConfig) (string, error)
-```
-GitCheckout will create and start a container, checkout repo and leave container
-stopped so volume can be imported
-
-#### func (*Git) Pull
-
-```go
-func (g *Git) Pull(name string) (string, error)
-```
-
-#### type GitCheckoutConfig
-
-```go
-type GitCheckoutConfig struct {
-	Repo, Branch, RelPath, Image string
-}
-```
-
-GitCheckoutConfig is input for Git.Checkout
-
-#### type ProgressDetail
-
-```go
-type ProgressDetail struct {
-	Current int `json:"current,omitempty"`
-	Total   int `json:"total,omitempty"`
-}
-```
-
-ProgressDetail records the progress achieved downloading an image
+SetShort sets the short description of the command
 
 #### type Task
 
 ```go
 type Task struct {
-	*DockerClient
+	*docker.Client
 }
 ```
 
 Task is the action performed when it's parent command is run
+
+#### func  NewTask
+
+```go
+func NewTask() *Task
+```
+NewTask returns a new Task structure containing a new Client object.
 
 #### func (*Task) Bind
 
@@ -286,6 +125,13 @@ given a source and destination directory
 
 The ~ symbol and relative paths will be correctly expanded depending on the host
 OS
+
+#### func (*Task) BindDocker
+
+```go
+func (t *Task) BindDocker()
+```
+BindDocker - Task util (convenience) to Bind the docker socket.
 
 #### func (*Task) SetDefaults
 
@@ -310,8 +156,8 @@ left unset, the defaultTaskFunc will be executed instead
 func (t *Task) SetInitFunc(f TaskFunc)
 ```
 SetInitFunc sets the TaskFunc which is executed before the main TaskFunc. It's
-pupose is to do any setup of the DockerClient which depends on command line args
-for example
+pupose is to do any setup of the Client which depends on command line args for
+example
 
 #### type TaskFunc
 

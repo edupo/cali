@@ -2,17 +2,19 @@ package cali
 
 import (
 	"fmt"
+	"log"
 	"os/user"
 	"path/filepath"
 	"runtime"
 	"strings"
-	"log"
+
+	"github.com/edupo/cali/docker"
 )
 
 // Task is the action performed when it's parent command is run
 type Task struct {
 	f, init TaskFunc
-	*DockerClient
+	*docker.Client
 }
 
 // TaskFunc is a function executed by a Task when the command the Task belongs to is run
@@ -27,9 +29,14 @@ var defaultTaskFunc TaskFunc = func(t *Task, args []string) {
 	if err := t.InitDocker(); err != nil {
 		log.Fatalf("Error initialising Docker: %s", err)
 	}
-	if _, err := t.StartContainer(false, ""); err != nil {
+	if _, err := t.ExecContainer(true, ""); err != nil {
 		log.Fatalf("Error executing task: %s", err)
 	}
+}
+
+// NewTask returns a new Task structure containing a new Client object.
+func NewTask() *Task {
+	return &Task{Client: docker.NewClient()}
 }
 
 // SetFunc sets the TaskFunc which is run when the parent command is run
@@ -39,7 +46,7 @@ func (t *Task) SetFunc(f TaskFunc) {
 }
 
 // SetInitFunc sets the TaskFunc which is executed before the main TaskFunc. It's
-// pupose is to do any setup of the DockerClient which depends on command line args
+// pupose is to do any setup of the Client which depends on command line args
 // for example
 func (t *Task) SetInitFunc(f TaskFunc) {
 	t.init = f
@@ -52,7 +59,8 @@ func (t *Task) SetInitFunc(f TaskFunc) {
 // Configures git
 func (t *Task) SetDefaults(args []string) error {
 	t.SetWorkDir(workDir)
-	t.SetRegistry(myFlags.GetString("docker-registry"))
+	t.SetRegistry(flags.GetString("docker-registry"))
+	t.Host = flags.GetString("docker-host")
 	awsDir, err := t.Bind("~/.aws", "/root/.aws")
 	if err != nil {
 		return err
