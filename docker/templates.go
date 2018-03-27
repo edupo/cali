@@ -184,8 +184,8 @@ type bintree struct {
 }
 
 var _bintree = &bintree{nil, map[string]*bintree{
-	"static": &bintree{nil, map[string]*bintree{
-		"fix.sh.template": &bintree{staticFixShTemplate, map[string]*bintree{}},
+	"static": {nil, map[string]*bintree{
+		"fix.sh.template": {staticFixShTemplate, map[string]*bintree{}},
 	}},
 }}
 
