@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"os/signal"
 	"syscall"
@@ -113,7 +112,7 @@ func (c *Client) fixContainer(containerID string) error {
 	// Reading the template and building the fix
 	id, err := user.Current()
 	check(err)
-	dat, err := ioutil.ReadFile("../static/fix.sh.template")
+	dat, err := Asset("static/fix.sh.template")
 	check(err)
 	tmpl, err := template.New("fix").Parse(string(dat))
 	check(err)
