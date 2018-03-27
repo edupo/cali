@@ -24,7 +24,7 @@ import (
 
 // ExecContainer is the main functionality of this library. It initializes,
 // fixes, executes and removes a container.
-func (c *DockerClient) ExecContainer(rm bool, name string) (string, error) {
+func (c *Client) ExecContainer(rm bool, name string) (string, error) {
 
 	// Runs the container just doing nothing
 	c.Conf.Entrypoint = []string{"sleep", "infinity"}
@@ -80,22 +80,20 @@ func (c *DockerClient) ExecContainer(rm bool, name string) (string, error) {
 }
 
 // ContainerExists determines if a container with the passed id exists
-func (c *DockerClient) ContainerExists(id string) bool {
+func (c *Client) ContainerExists(id string) bool {
 	_, err := c.Cli.ContainerInspect(context.Background(), id)
 
 	return err == nil
 }
 
 // DeleteContainer does exactly that adding some logging
-func (c *DockerClient) DeleteContainer(id string) error {
+func (c *Client) DeleteContainer(id string) error {
 	log.WithFields(log.Fields{
 		"id": id[0:12],
 	}).Debug("Removing container")
 
-	if err := c.Cli.ContainerRemove(context.Background(), id, types.ContainerRemoveOptions{Force: true}); err != nil {
-		return err
-	}
-	return nil
+	return c.Cli.ContainerRemove(context.Background(), id,
+		types.ContainerRemoveOptions{Force: true})
 }
 
 // fixContainer executes as script inside a running container that sets it up
@@ -103,7 +101,7 @@ func (c *DockerClient) DeleteContainer(id string) error {
 // - It adds the current user in the container.
 // - It adds the current user main group and sets up the user on that one.
 // - It creates user home (used by certain tools to store cache files)
-func (c *DockerClient) fixContainer(containerID string) error {
+func (c *Client) fixContainer(containerID string) error {
 
 	log.WithField("image", c.Conf.Image).Debug("Fixing image")
 
@@ -115,6 +113,9 @@ func (c *DockerClient) fixContainer(containerID string) error {
 	tar.Add("fix.sh", dat)
 	tar.Close()
 	holyTar, err := os.Open("/tmp/clide_fix.tar")
+	if err != nil {
+		return err
+	}
 	defer holyTar.Close()
 
 	// The actual deploy happens next
@@ -128,21 +129,16 @@ func (c *DockerClient) fixContainer(containerID string) error {
 	}
 
 	// Executing the fix script.
-	err = c.execContainer(
+	return c.execContainer(
 		containerID,
 		[]string{"/bin/sh", "/tmp/fix.sh"},
 		"root",
 		true)
-	if err != nil {
-		return err
-	}
-
-	return err
 }
 
 // initializeContainer run the container with a background void process
 // such as 'wait infinite'
-func (c *DockerClient) initializeContainer(name string) (string, error) {
+func (c *Client) initializeContainer(name string) (string, error) {
 
 	log.WithFields(log.Fields{
 		"image": c.Conf.Image,
@@ -181,7 +177,7 @@ func (c *DockerClient) initializeContainer(name string) (string, error) {
 }
 
 // execContainer executes a command inside a running container
-func (c *DockerClient) execContainer(id string, cmd []string,
+func (c *Client) execContainer(id string, cmd []string,
 	user string, nonInteractive bool) error {
 
 	log.WithFields(log.Fields{

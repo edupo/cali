@@ -20,19 +20,19 @@ type GitCheckoutConfig struct {
 const gitImage = "indiehosters/git:latest"
 
 // Git returns a new instance
-func (c *DockerClient) Git() *Git {
+func (c *Client) Git() *Git {
 	return &Git{c: c, Image: gitImage}
 }
 
 // Git is used to interact with containerised git
 type Git struct {
-	c     *DockerClient
+	c     *Client
 	Image string
 }
 
 // BindFromGit creates a data container with a git clone inside and mounts its volumes inside your app container
 // If there is no valid Git repo set in config, the noGit callback function will be executed instead
-func (c *DockerClient) BindFromGit(cfg *GitCheckoutConfig, noGit func() error) error {
+func (c *Client) BindFromGit(cfg *GitCheckoutConfig, noGit func() error) error {
 	cli := NewClient()
 	cli.Host = c.Host
 	cli.Registry = c.Registry

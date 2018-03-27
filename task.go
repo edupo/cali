@@ -14,7 +14,7 @@ import (
 // Task is the action performed when it's parent command is run
 type Task struct {
 	f, init TaskFunc
-	*docker.DockerClient
+	*docker.Client
 }
 
 // TaskFunc is a function executed by a Task when the command the Task belongs to is run
@@ -34,8 +34,9 @@ var defaultTaskFunc TaskFunc = func(t *Task, args []string) {
 	}
 }
 
+// NewTask returns a new Task structure containing a new Client object.
 func NewTask() *Task {
-	return &Task{DockerClient: docker.NewClient()}
+	return &Task{Client: docker.NewClient()}
 }
 
 // SetFunc sets the TaskFunc which is run when the parent command is run
@@ -45,7 +46,7 @@ func (t *Task) SetFunc(f TaskFunc) {
 }
 
 // SetInitFunc sets the TaskFunc which is executed before the main TaskFunc. It's
-// pupose is to do any setup of the DockerClient which depends on command line args
+// pupose is to do any setup of the Client which depends on command line args
 // for example
 func (t *Task) SetInitFunc(f TaskFunc) {
 	t.init = f

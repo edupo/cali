@@ -27,7 +27,7 @@ type CreateResponse struct {
 }
 
 // ImageExists determines if an image exist locally
-func (c *DockerClient) ImageExists(image string) bool {
+func (c *Client) ImageExists(image string) bool {
 	_, _, err := c.Cli.ImageInspectWithRaw(context.Background(), image)
 
 	// TODO: Safe assumption?
@@ -41,7 +41,7 @@ func (c *DockerClient) ImageExists(image string) bool {
 
 // PullImage performs an image pull if that image does not exists locally.
 // TODO: Image autoupdate as a parameter
-func (c *DockerClient) PullImage(image string) error {
+func (c *Client) PullImage(image string) error {
 
 	// TODO: Check for changes in the remote
 	if !c.ImageExists(image) {
