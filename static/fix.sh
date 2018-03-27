@@ -1,8 +1,8 @@
 #!/bin/sh
 
 # Get standard cali USER_ID variable
-USER_ID=${HOST_USER_ID:-9001}
-GROUP_ID=${HOST_GROUP_ID:-9001}
+USER_ID={{.Uid}}
+GROUP_ID={{.Gid}}
 
 useradd -ms /bin/sh user
 

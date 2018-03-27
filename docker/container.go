@@ -8,6 +8,11 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"text/template"
+
+	"os/user"
+
+	"bytes"
 
 	log "github.com/Sirupsen/logrus"
 	"github.com/docker/docker/api/types"
@@ -105,12 +110,21 @@ func (c *Client) fixContainer(containerID string) error {
 
 	log.WithField("image", c.Conf.Image).Debug("Fixing image")
 
+	// Reading the template and building the fix
+	id, err := user.Current()
+	check(err)
+	dat, err := ioutil.ReadFile("../static/fix.sh")
+	check(err)
+	tmpl, err := template.New("fix").Parse(string(dat))
+	check(err)
+	var b bytes.Buffer
+	err = tmpl.Execute(&b, id)
+	check(err)
+
 	// To deploy the fix script we need to tar it first
 	tar := new(archivex.TarFile)
 	tar.Create("/tmp/clide_fix.tar")
-	dat, err := ioutil.ReadFile("../static/fix.sh")
-	check(err)
-	tar.Add("fix.sh", dat)
+	tar.Add("fix.sh", b.Bytes())
 	tar.Close()
 	holyTar, err := os.Open("/tmp/clide_fix.tar")
 	if err != nil {

@@ -1,7 +1,0 @@
-FROM {{.image}}
-
-RUN useradd -ms /bin/sh user
-
-COPY entrypoint.sh /bin/entrypoint.sh
-
-ENTRYPOINT [ "/bin/entrypoint.sh" ]
