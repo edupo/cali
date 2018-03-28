@@ -17,6 +17,7 @@ type Client struct {
 	Conf            *container.Config
 	Registry, Image string
 	Entrypoint      []string
+	ApplyUserFix    bool
 }
 
 // NewClient returns a new Client initialised with the API object
@@ -56,6 +57,7 @@ func (c *Client) SetDefaults() {
 		Tty:          true,
 		Env:          []string{},
 	}
+	c.ApplyUserFix = true
 }
 
 // SetHostConf sets the container.HostConfig struct for the new container

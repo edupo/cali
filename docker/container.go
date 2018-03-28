@@ -37,11 +37,13 @@ func (c *Client) ExecContainer(rm bool, name string) (string, error) {
 		return id, err
 	}
 
-	// Apply the fixes
-	if err := c.fixContainer(id); err != nil {
-		return id, err
+	// Apply user fix to the container if is required
+	if c.ApplyUserFix {
+		if err := c.fixContainer(id); err != nil {
+			return id, err
+		}
+		check(err)
 	}
-	check(err)
 
 	// Clean up on ctrl+c
 	ch := make(chan os.Signal, 1)
