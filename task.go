@@ -36,7 +36,10 @@ var defaultTaskFunc TaskFunc = func(t *Task, args []string) {
 
 // NewTask returns a new Task structure containing a new Client object.
 func NewTask() *Task {
-	return &Task{Client: docker.NewClient()}
+	return &Task{
+		Client: docker.NewClient(),
+		f:      defaultTaskFunc,
+	}
 }
 
 // SetFunc sets the TaskFunc which is run when the parent command is run

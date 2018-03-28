@@ -51,7 +51,6 @@ func (c *Command) AddTask(def interface{}) *Task {
 	switch d := def.(type) {
 	case string:
 		t.SetImage(d)
-		t.SetFunc(defaultTaskFunc)
 	case TaskFunc:
 		t.SetFunc(d)
 	default:
